@@ -55,6 +55,27 @@ replace_filter_types
 
 **phase:** *output body filter*
 
+Installation
+============
+
+You need to install the sregex library first:
+
+https://github.com/agentzh/sregex
+
+And then rebuild your Nginx like this:
+
+    ./configure --add-module=/path/to/replace-filter-nginx-module
+
+If sregex is not installed to the default prefix (i.e., `/usr/local`), then
+you should specify the locations of your sregex installation via
+the `SREGEX_INC` and `SREGEX_LIB` environments before running the
+`./configure` script, as in
+
+    export SREGEX_INC=/opt/sregex/include
+    export SREGEX_LIB=/opt/sregex/lib
+
+assuming that your sregex is installed to the prefix `/opt/sregex`.
+
 Copyright and License
 =====================
 
