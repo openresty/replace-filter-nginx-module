@@ -695,3 +695,21 @@ Xb
 [alert]
 [error]
 
+
+
+=== TEST 30: memory bufs with last_buf=1
+--- config
+    default_type text/html;
+    location /t {
+        return 200 "abc";
+        replace_filter \w+ X;
+    }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- response_body chop
+X
+--- no_error_log
+[alert]
+[error]
+
