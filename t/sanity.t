@@ -546,7 +546,7 @@ F(ngx_palloc) {
 --- stap3 eval: $::StapOutputChains
 --- request
 GET /t
---- response_body
+--- response_body chop
 a
 b
 
@@ -595,13 +595,6 @@ b
         internal;
     }
 
-    location /b.html {
-        echo -n 'a';
-        echo ' ';
-        echo "b";
-        replace_filter '^\s+|\s+$' '' g;
-    }
-
     location = /t {
         content_by_lua '
             local res = ngx.location.capture("/a.html")
@@ -630,7 +623,7 @@ F(ngx_palloc) {
     }
 }
 --- request
-GET /b.html
+GET /t
 --- response_body chop
 hello, world
 blah yeah
@@ -709,6 +702,415 @@ GET /t
 --- stap2 eval: $::StapOutputChains
 --- response_body chop
 X
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 31: trim both leading and trailing spaces (2 bytes at a time)
+--- config
+    default_type text/html;
+    location /a.html {
+        internal;
+    }
+
+    location = /t {
+        content_by_lua '
+            local res = ngx.location.capture("/a.html")
+            local txt = res.body
+            local len = string.len(txt)
+            i = 1
+            while i <= len do
+                if i == len then
+                    ngx.print(string.sub(txt, i, i))
+                    i = i + 1
+                else
+                    ngx.print(string.sub(txt, i, i + 1))
+                    i = i + 2
+                end
+                ngx.flush(true)
+            end
+        ';
+        replace_filter '^\s+|\s+$' '' g;
+    }
+--- user_files
+>>> a.html
+  hello, world  
+blah yeah
+hello  
+   baby!
+     
+abc
+
+--- stap2 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body chop
+hello, world
+blah yeah
+hello
+baby!
+abc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 32: trim both leading and trailing spaces (3 bytes at a time)
+--- config
+    default_type text/html;
+    location /a.html {
+        internal;
+    }
+
+    location = /t {
+        content_by_lua '
+            local res = ngx.location.capture("/a.html")
+            local txt = res.body
+            local len = string.len(txt)
+            i = 1
+            while i <= len do
+                if i == len then
+                    ngx.print(string.sub(txt, i, i))
+                    i = i + 1
+                elseif i == len - 1 then
+                    ngx.print(string.sub(txt, i, i + 1))
+                    i = i + 2
+                else
+                    ngx.print(string.sub(txt, i, i + 2))
+                    i = i + 3
+                end
+                ngx.flush(true)
+            end
+        ';
+        replace_filter '^\s+|\s+$' '' g;
+    }
+--- user_files
+>>> a.html
+  hello, world  
+blah yeah
+hello  
+   baby!
+     
+abc
+
+--- stap2 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body chop
+hello, world
+blah yeah
+hello
+baby!
+abc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 33: github issue #2: error "general look-ahead not supported"
+--- config
+    location /t {
+         charset utf-8;
+         default_type text/html;
+         echo "ABCabcABCabc";
+         #replace_filter_types text/plain;
+         replace_filter "a.+a" "X" "ig";
+     }
+--- request
+GET /t
+--- response_body
+Xbc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 34: backtrack to the middle of a pending capture (pending: output|capture + rematch)
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n ab;
+        echo -n c;
+        echo d;
+        replace_filter 'abce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 35: backtrack to the middle of a pending capture (pending: output + capture|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n bc;
+        echo d;
+        replace_filter 'abce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 36: backtrack to the middle of a pending capture (pending: output + capture + rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n b;
+        echo -n c;
+        echo d;
+        replace_filter 'abce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 37: backtrack to the middle of a pending capture (pending: output|capture|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n abc;
+        echo d;
+        replace_filter 'abce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 38: backtrack to the middle of a pending capture (pending: output|capture|rematch(2)
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n abcc;
+        echo d;
+        replace_filter 'abcce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXccd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 39: backtrack to the middle of a pending capture (pending: output|capture(2)|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n abbc;
+        echo d;
+        replace_filter 'abbce|bb' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 40: backtrack to the middle of a pending capture (pending: output(2)|capture|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n aabc;
+        echo d;
+        replace_filter 'aabce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aaXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 41: backtrack to the beginning of a pending capture (pending: output + capture|rematch(2)
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n bcc;
+        echo d;
+        replace_filter 'abcce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXccd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 42: backtrack to the beginning of a pending capture (pending: output + capture(2)|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n bbc;
+        echo d;
+        replace_filter 'abbce|bb' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 43: backtrack to the middle of a pending capture (pending: output(2) + capture|rematch
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n aa;
+        echo -n bc;
+        echo d;
+        replace_filter 'aabce|b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aaXcd
+
 --- no_error_log
 [alert]
 [error]

@@ -55,6 +55,7 @@ typedef struct {
     ngx_chain_t               *free;
     ngx_chain_t               *special;
     ngx_chain_t              **last_special;
+    ngx_chain_t               *rematch;
 
     unsigned                   once:1;
     unsigned                   vm_done:1;
@@ -219,10 +220,12 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
     ngx_int_t                  rc;
     ngx_buf_t                 *b;
-    ngx_chain_t               *cl;
+    ngx_chain_t               *cl, *cur = NULL;
 
     ngx_http_replace_ctx_t        *ctx;
     ngx_http_replace_loc_conf_t   *slcf;
+
+    slcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_replace_filter_module);
 
@@ -263,8 +266,9 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     while (ctx->in || ctx->buf) {
 
         if (ctx->buf == NULL) {
-            ctx->buf = ctx->in->buf;
-            ctx->in = ctx->in->next;
+            cur = ctx->in;
+            ctx->buf = cur->buf;
+            ctx->in = cur->next;
 
             ctx->pos = ctx->buf->pos;
             ctx->special_buf = ngx_buf_special(ctx->buf);
@@ -363,11 +367,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             b = cl->buf;
 
-            b->flush = 0;
-            b->shadow = NULL;
-
-            slcf = ngx_http_get_module_loc_conf(r,
-                                                ngx_http_replace_filter_module);
+            dd("free data buf: %p", b);
 
             dd("emit replaced value: \"%.*s\"", (int) slcf->value.len,
                slcf->value.data);
@@ -389,6 +389,11 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             ctx->once = slcf->once;
 
+            if (cur && ctx->rematch) {
+                dd("goto rematch");
+                goto rematch;
+            }
+
             if (ctx->special_buf) {
                 break;
             }
@@ -396,7 +401,9 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             continue;
         }
 
-        if (ctx->buf->flush || ctx->last_buf || ngx_buf_in_memory(ctx->buf)) {
+        if ((ctx->buf->flush || ctx->last_buf || ngx_buf_in_memory(ctx->buf))
+            && cur)
+        {
             if (b == NULL) {
                 cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
                 if (cl == NULL) {
@@ -422,7 +429,30 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             ctx->stream_pos += ctx->buf->last - ctx->buf->pos;
         }
 
-        ctx->buf = NULL;
+rematch:
+        if (ctx->rematch == NULL) {
+            ctx->buf = NULL;
+            cur = NULL;
+
+        } else {
+
+            if (cur) {
+                ctx->in = cur;
+                cur = NULL;
+            }
+
+            ctx->buf = ctx->rematch->buf;
+
+            dd("ctx->buf set to rematch buf %p, len=%d, next=%p",
+               ctx->buf, (int) ngx_buf_size(ctx->buf), ctx->rematch->next);
+
+            ctx->rematch = ctx->rematch->next;
+
+            ctx->pos = ctx->buf->pos;
+            ctx->special_buf = ngx_buf_special(ctx->buf);
+            ctx->last_buf = (ctx->buf->last_buf || ctx->buf->last_in_chain);
+            ctx->stream_pos = ctx->buf->file_pos;
+        }
 
 #if (DDEBUG)
         if (ctx->pending == NULL) {
@@ -563,10 +593,10 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 static ngx_int_t
 ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 {
-    int                    rc, from, to;
+    int                    rc, from, to, file_last;
     size_t                 len;
     ngx_buf_t             *b;
-    ngx_chain_t           *cl, *newcl, *pending, **ll;
+    ngx_chain_t           *cl, *newcl, *pending, **ll, **last_pending;
 
     if (ctx->once || ctx->vm_done) {
         ctx->copy_start = ctx->pos;
@@ -580,7 +610,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
     len = ctx->buf->last - ctx->pos;
 
-    dd("=== process data chunk pos=%u, special=%u, last=%u, \"%.*s\"",
+    dd("=== process data chunk %p len=%d, pos=%u, special=%u, "
+       "last=%u, \"%.*s\"", ctx->buf, (int) len,
        (int) (ctx->pos - ctx->buf->pos + ctx->stream_pos),
        ctx->special_buf, ctx->last_buf,
        (int) len, ctx->pos);
@@ -618,13 +649,6 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
         dd("non-empty $& capture");
 
-        if (to < ctx->stream_pos) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "general look-ahead not supported: %d < %d",
-                          to, ctx->stream_pos);
-            return NGX_ERROR;
-        }
-
         if (from >= ctx->stream_pos) {
 
             if (ctx->pending) {
@@ -645,33 +669,157 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
         ll = &ctx->pending;
         for (cl = ctx->pending; cl; ll = &cl->next, cl = cl->next) {
-            dd("checking buf %d-%d against capture (%d, %d)",
+            dd("checking pending buf %d-%d against capture (%d, %d)",
                (int) cl->buf->file_pos, (int) cl->buf->file_last,
                from, to);
 
             if (cl->buf->file_pos < to && cl->buf->file_last > from) {
-                dd("buf \"%.*s\" overlapped with the capture",
+                dd("pending buf \"%.*s\" overlapped with the capture",
                    (int) ngx_buf_size(cl->buf), cl->buf->pos);
 
                 if (cl->buf->file_pos < from) {
-                    dd("discard all the pending data after \"from\" "
-                       "because %d < %d", (int) cl->buf->file_pos, from);
+                    dd("found the last chunk of pending data before the "
+                       "capture: \"%.*s\"", (int) (from - cl->buf->file_pos),
+                       cl->buf->pos);
 
-                    cl->buf->last -= cl->buf->file_last - from;
+                    file_last = cl->buf->file_last;
+                    cl->buf->last -= file_last - from;
                     cl->buf->file_last = from;
 
+                    last_pending = ctx->last_pending;
+                    ctx->last_pending = &cl->next;
+
+                    if (to < ctx->stream_pos) {
+                        dd("collect bufs that need to be matched again");
+
+                        newcl = ngx_http_replace_get_free_buf(r->pool,
+                                                              &ctx->free);
+                        if (newcl == NULL) {
+                            return NGX_ERROR;
+                        }
+
+                        newcl->buf->memory = 1;
+                        newcl->buf->pos = cl->buf->last;
+                        newcl->buf->last = cl->buf->last + file_last - from;
+                        newcl->buf->file_pos = from;
+                        newcl->buf->file_last = file_last;
+
+                        newcl->next = cl->next;
+
+                        cl = newcl;
+
+                        for ( ;; ) {
+                            if (cl->buf->file_last <= to) {
+                                dd("abandon pending buf \"%.*s\" within the "
+                                   "capture", (int) ngx_buf_size(cl->buf),
+                                   cl->buf->pos);
+
+                                newcl = cl->next;
+                                cl->next = ctx->free;
+                                ctx->free = cl;
+
+                                cl = newcl;
+                                if (cl) {
+                                    continue;
+                                }
+
+                                /* cannot reach here */
+                                return NGX_ERROR;
+                            }
+
+                            dd("found the boundary, pending buf \"%.*s\" is "
+                               "the first data buf that needs re-matching",
+                               (int) ngx_buf_size(cl->buf), cl->buf->pos);
+
+                            dd("adjust the pending buf %p to start from "
+                               "\"to\" by offset %d, len=%d, next=%p, "
+                               "rematch=%p",
+                               cl->buf, (int) (to - cl->buf->file_pos),
+                               (int) ngx_buf_size(cl->buf),
+                               cl->next, ctx->rematch);
+
+                            cl->buf->pos += to - cl->buf->file_pos;
+                            cl->buf->file_pos = to;
+
+                            /* pre-append the chain starting from cl to
+                             * ctx->remain */
+
+                            *last_pending = ctx->rematch;
+                            ctx->rematch = cl;
+
+                            break;
+                        }
+
+                        break;
+                    }
+
                     if (cl->next) {
+                        dd("discard the all the subsequent pending data in the "
+                           "capture starting from \"%.*s\"",
+                           (int) ngx_buf_size(cl->next->buf),
+                           cl->next->buf->pos);
+
                         cl->next->next = ctx->free;
                         ctx->free = cl->next;
                         cl->next = NULL;
                     }
 
-                    ctx->last_pending = &cl->next;
                     break;
                 }
 
                 dd("discard cl and its following chains, to=%d, stream_pos=%d",
                    to, ctx->stream_pos);
+
+                if (to < ctx->stream_pos) {
+                    dd("collect pending bufs that need to be matched again");
+
+                    for ( ;; ) {
+                        if (cl->buf->file_last <= to) {
+                            dd("abandon pending buf \"%.*s\" within the "
+                               "capture", (int) ngx_buf_size(cl->buf),
+                               cl->buf->pos);
+
+                            *ll = cl->next;
+                            cl->next = ctx->free;
+                            ctx->free = cl;
+
+                            cl = *ll;
+                            if (cl) {
+                                continue;
+                            }
+
+                            /* cannot reach here */
+                            return NGX_ERROR;
+                        }
+
+                        dd("found the boundary, pending buf \"%.*s\" is the "
+                           "first data buf that needs re-matching",
+                           (int) ngx_buf_size(cl->buf), cl->buf->pos);
+
+                        dd("adjust the pending buf %p to start from \"to\" by "
+                           "offset %d, len=%d, next=%p, rematch=%p",
+                           cl->buf, (int) (to - cl->buf->file_pos),
+                           (int) ngx_buf_size(cl->buf),
+                           cl->next, ctx->rematch);
+
+                        cl->buf->pos += to - cl->buf->file_pos;
+                        cl->buf->file_pos = to;
+
+                        /* pre-append the chain starting from cl to
+                         * ctx->remain */
+
+                        *ctx->last_pending = ctx->rematch;
+                        ctx->rematch = cl;
+
+                        /* break from the ctx->pending chain */
+                        *ll = NULL;
+                        ctx->last_pending = ll;
+
+                        break;
+                    }
+
+                    break;
+                }
 
                 *ll = NULL;
                 cl->next = ctx->free;
@@ -723,6 +871,16 @@ done:
 
         if (from == to) {
             dd("even partial match does not exist");
+
+            if (ctx->pending) {
+                dd("output pending");
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
             ctx->copy_start = ctx->pos;
             ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
             ctx->pos = ctx->copy_end;
