@@ -641,3 +641,39 @@ abc
 [alert]
 [error]
 
+
+
+=== TEST 27: \b at the border
+--- config
+    default_type text/html;
+    location /t {
+        echo -n a;
+        echo b;
+        replace_filter '\bb|a' X g;
+    }
+--- request
+GET /t
+--- response_body
+Xb
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 28: \B at the border
+--- config
+    default_type text/html;
+    location /t {
+        echo -n a;
+        echo ',';
+        replace_filter '\B,|a' X g;
+    }
+--- request
+GET /t
+--- response_body
+X,
+--- no_error_log
+[alert]
+[error]
+
