@@ -580,8 +580,10 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
     len = ctx->buf->last - ctx->pos;
 
-    dd("process data chunk \"%.*s\", special=%u, last=%u", (int) len, ctx->pos,
-       ctx->special_buf, ctx->last_buf);
+    dd("=== process data chunk pos=%u, special=%u, last=%u, \"%.*s\"",
+       (int) (ctx->pos - ctx->buf->pos + ctx->stream_pos),
+       ctx->special_buf, ctx->last_buf,
+       (int) len, ctx->pos);
 
     rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf);
 
@@ -652,8 +654,10 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
                    (int) ngx_buf_size(cl->buf), cl->buf->pos);
 
                 if (cl->buf->file_pos < from) {
-                    dd("discard all the pending data after \"from\"");
-                    cl->buf->last -= from - cl->buf->file_pos;
+                    dd("discard all the pending data after \"from\" "
+                       "because %d < %d", (int) cl->buf->file_pos, from);
+
+                    cl->buf->last -= cl->buf->file_last - from;
                     cl->buf->file_last = from;
 
                     if (cl->next) {

@@ -527,7 +527,6 @@ X
 
 
 === TEST 24: trim both leading and trailing spaces (1 byte at a time)
---- SKIP
 --- config
     default_type text/html;
     location = /t {
@@ -554,10 +553,41 @@ b
 --- no_error_log
 [alert]
 [error]
+--- SKIP
 
 
 
-=== TEST 25: trim both leading and trailing spaces (1 byte at a time)
+=== TEST 25: trim both leading and trailing spaces (1 byte at a time), no \s for $
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n 'a';
+        echo ' ';
+        echo "b";
+        replace_filter '^\s+| +$' '' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+a
+b
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 26: trim both leading and trailing spaces (1 byte at a time)
 --- SKIP
 --- config
     default_type text/html;
