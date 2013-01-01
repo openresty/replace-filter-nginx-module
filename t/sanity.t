@@ -677,3 +677,21 @@ X,
 [alert]
 [error]
 
+
+
+=== TEST 29: \A at the border
+--- config
+    default_type text/html;
+    location /t {
+        echo -n a;
+        echo 'b';
+        replace_filter '\Ab|a' X g;
+    }
+--- request
+GET /t
+--- response_body
+Xb
+--- no_error_log
+[alert]
+[error]
+
