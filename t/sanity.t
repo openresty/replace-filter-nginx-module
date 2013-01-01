@@ -19,11 +19,13 @@ F(ngx_http_handler) {
     active = 1
 }
 
+/*
 F(ngx_http_write_filter) {
     if (active && pid() == target()) {
         printf("http writer filter: %s\n", ngx_chain_dump($in))
     }
 }
+*/
 
 F(ngx_http_chunked_body_filter) {
     if (active && pid() == target()) {
@@ -51,7 +53,7 @@ probe syscall.writev.return {
 _EOC_
 
 #no_diff();
-no_long_string();
+#no_long_string();
 run_tests();
 
 __DATA__
@@ -461,7 +463,7 @@ abc
 
 
 
-=== TEST 20: trim both leading and trailing spaces
+=== TEST 21: trim both leading and trailing spaces
 --- config
     default_type text/html;
     location /a.html {
@@ -477,6 +479,128 @@ hello
 abc
 --- request
 GET /a.html
+--- response_body chop
+hello, world
+blah yeah
+hello
+baby!
+abc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 22: pure flush buf in the stream (no data)
+--- config
+    default_type text/html;
+    location = /t {
+        echo_flush;
+        replace_filter 'a' 'X' g;
+    }
+--- request
+GET /t
+--- response_body chop
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 23: pure flush buf in the stream (with data)
+--- config
+    default_type text/html;
+    location = /t {
+        echo a;
+        echo_flush;
+        replace_filter 'a' 'X' g;
+    }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- response_body
+X
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 24: trim both leading and trailing spaces (1 byte at a time)
+--- SKIP
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n 'a';
+        echo ' ';
+        echo "b";
+        replace_filter '^\s+|\s+$' '' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+a
+b
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 25: trim both leading and trailing spaces (1 byte at a time)
+--- SKIP
+--- config
+    default_type text/html;
+    location /a.html {
+        internal;
+    }
+
+    location /b.html {
+        echo -n 'a';
+        echo ' ';
+        echo "b";
+        replace_filter '^\s+|\s+$' '' g;
+    }
+
+    location = /t {
+        content_by_lua '
+            local res = ngx.location.capture("/a.html")
+            local txt = res.body
+            for i = 1, string.len(txt) do
+                ngx.print(string.sub(txt, i, i))
+                ngx.flush(true)
+            end
+        ';
+        replace_filter '^\s+|\s+$' '' g;
+    }
+--- user_files
+>>> a.html
+  hello, world  
+blah yeah
+hello  
+   baby!
+     
+abc
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- request
+GET /b.html
 --- response_body chop
 hello, world
 blah yeah

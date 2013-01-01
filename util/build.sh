@@ -20,8 +20,9 @@ ngx-build $force $version \
             --without-http_autoindex_module \
             --without-http_auth_basic_module \
             --without-http_userid_module \
-          --add-module=$home/git/echo-nginx-module \
           --add-module=$root $opts \
+          --add-module=$home/git/lua-nginx-module \
+          --add-module=$home/git/echo-nginx-module \
           --with-debug
           #--with-cc-opt="-g3 -O0"
           #--add-module=$root/../echo-nginx-module \
