@@ -35,10 +35,10 @@ Description
 This Nginx output filter module tries to do regular expression substitions in
 a non-buffered manner wherever possible.
 
-This module does not use existing regular expression libraries like PCRE, rather,
-it uses the new [sregex](https://github.com/agentzh/sregex) library implemented by the author himself, which was designed with streaming processing in mind from Day 1:
+This module does *not* use existing regular expression libraries like PCRE, rather,
+it uses the new [sregex](https://github.com/agentzh/sregex) library implemented by the author himself, which was designed with streaming processing in mind from the very beginning:
 
-A good common subset of Perl 5 regular expressions is supported. For the complete
+A good common subset of Perl 5 regular expressions is supported by `sregex`. For the complete
 feature list, check out sregex's documentation:
 
 https://github.com/agentzh/sregex#syntax-supported
