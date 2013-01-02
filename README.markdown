@@ -44,7 +44,7 @@ Synopsis
         replace_filter '^[ \f\t]+|[ \f\t]+$' '' g;
     }
 
-    location ~ '.cpp$' {
+    location ~ '\.cpp$' {
         # proxy_pass/fastcgi_pass/root/...
 
         # remove all those ugly C/C++ comments:
