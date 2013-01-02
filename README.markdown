@@ -29,20 +29,45 @@ Synopsis
         replace_filter_types text/plain text/css;
     }
 
+Description
+===========
+
+This Nginx output filter module tries to do regular expression substitions in
+a non-buffered manner wherever possible.
+
+This module does not use existing regular expression libraries like PCRE, rather,
+it uses the new [sregex](https://github.com/agentzh/sregex) library implemented by the author himself, which was designed with streaming processing in mind from Day 1:
+
+A good common subset of Perl 5 regular expressions is supported. For the complete
+feature list, check out sregex's documentation:
+
+https://github.com/agentzh/sregex#syntax-supported
+
+Response body data is only buffered when absolutely necessary, like facing an incomplete capture that belongs to a possible match.
+
 Directives
 ==========
 
 replace_filter
 --------------
-**syntax:** *replace_filter &lt;regex&gt; &lt;replace&gt;*
+**syntax:** *replace_filter &lt;regex&gt; &lt;replace&gt; &lt;options&gt;*
 
-**syntax:** *replace_filter &lt;regex&gt; &lt;replace&gt; &lt;flags&gt;*
-
-**default:** *no*
+**default:** *replace_filter &lt;regex&gt; &lt;replace&gt; ""*
 
 **context:** *http, server, location*
 
 **phase:** *output body filter*
+
+Specifies the regex pattern and text to be replaced, with an optional regex flags.
+
+By default, the filter topped matching after the first match is found. This behavior can be changed by specifying the `g` regex option.
+
+The following regex options are supported:
+
+* `g`
+: for global search and substituion
+* `i`
+: for case-insensitive matching
 
 replace_filter_types
 --------------------
@@ -54,6 +79,10 @@ replace_filter_types
 **context:** *http, server, location*
 
 **phase:** *output body filter*
+
+Specify one or more MIME types (in the `Content-Type` response header) to be processed.
+
+By default, only `text/html` typed responses are processed.
 
 Installation
 ============
@@ -75,6 +104,39 @@ the `SREGEX_INC` and `SREGEX_LIB` environments before running the
     export SREGEX_LIB=/opt/sregex/lib
 
 assuming that your sregex is installed to the prefix `/opt/sregex`.
+
+TODO
+====
+
+* implement multiple `replace_filter` directives in the same location. All the patterns will be applied as in a tokenizer.
+* reduce the amount of data that has to be buffered for when an partial match is already found.
+* recycle the memory blocks used to buffer the pending capture data.
+
+Community
+=========
+
+English Mailing List
+--------------------
+
+The [openresty-en](https://groups.google.com/group/openresty-en) mailing list is for English speakers.
+
+Chinese Mailing List
+--------------------
+
+The [openresty](https://groups.google.com/group/openresty) mailing list is for Chinese speakers.
+
+Bugs and Patches
+================
+
+Please submit bug reports, wishlists, or patches by
+
+1. creating a ticket on the [GitHub Issue Tracker](http://github.com/agentzh/replace-filter-nginx-module/issues),
+1. or posting to the [OpenResty community](http://wiki.nginx.org/HttpLuaModule#Community).
+
+Author
+======
+
+Yichun "agentzh" Zhang (章亦春) <agentzh@gmail.com>
 
 Copyright and License
 =====================
