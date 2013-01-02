@@ -3,7 +3,7 @@ Name
 
 ngx_replace_filter - Streaming regular expression replacement in response bodies.
 
-*This module is not distributed with the Nginx source.* See [the installation instructions](#Installation).
+*This module is not distributed with the Nginx source.* See [the installation instructions](#installation).
 
 Status
 ======
