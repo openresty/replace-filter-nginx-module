@@ -1365,3 +1365,41 @@ blah  */ b
 [alert]
 [error]
 
+
+
+=== TEST 53: remove C/C++ comments (all at a time) - server-level config
+--- config
+    default_type text/html;
+
+    replace_filter '/\*.*?\*/|//[^\n]*' '' g;
+
+--- user_files
+>>> a.html
+ i don't know   // hello // world /* */
+hello world /** abc * b/c /*
+    hello ** // world
+    *
+    */
+blah /* hi */ */ b
+//
+///hi
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- request
+GET /a.html
+--- response_body eval
+" i don't know   
+hello world 
+blah  */ b
+
+
+"
+--- no_error_log
+[alert]
+[error]
+

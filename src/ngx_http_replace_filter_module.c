@@ -1189,6 +1189,9 @@ ngx_http_replace_create_conf(ngx_conf_t *cf)
      *     conf->value = { 0, NULL };
      *     conf->types = { NULL };
      *     conf->types_keys = NULL;
+     *     conf->program = NULL;
+     *     conf->ncaps = 0;
+     *     conf->ovecsize = 0;
      */
 
     slcf->once = NGX_CONF_UNSET;
@@ -1206,6 +1209,12 @@ ngx_http_replace_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->once, prev->once, 1);
     ngx_conf_merge_str_value(conf->match, prev->match, "");
     ngx_conf_merge_str_value(conf->value, prev->value, "");
+
+    if (conf->program == NULL) {
+        conf->program = prev->program;
+        conf->ncaps = prev->ncaps;
+        conf->ovecsize = prev->ovecsize;
+    }
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
                              &prev->types_keys, &prev->types,
