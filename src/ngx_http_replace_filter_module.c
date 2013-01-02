@@ -1246,11 +1246,18 @@ ngx_http_replace_merge_conf(ngx_conf_t *cf, void *parent, void *child)
 static ngx_int_t
 ngx_http_replace_filter_init(ngx_conf_t *cf)
 {
-    ngx_http_next_header_filter = ngx_http_top_header_filter;
-    ngx_http_top_header_filter = ngx_http_replace_header_filter;
+    ngx_http_replace_main_conf_t    *rmcf;
 
-    ngx_http_next_body_filter = ngx_http_top_body_filter;
-    ngx_http_top_body_filter = ngx_http_replace_body_filter;
+    rmcf =
+        ngx_http_conf_get_module_main_conf(cf, ngx_http_replace_filter_module);
+
+    if (rmcf->compiler_pool != NULL) {
+        ngx_http_next_header_filter = ngx_http_top_header_filter;
+        ngx_http_top_header_filter = ngx_http_replace_header_filter;
+
+        ngx_http_next_body_filter = ngx_http_top_body_filter;
+        ngx_http_top_body_filter = ngx_http_replace_body_filter;
+    }
 
     return NGX_OK;
 }

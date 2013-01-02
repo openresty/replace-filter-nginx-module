@@ -1440,3 +1440,21 @@ abc
 [alert]
 [error]
 
+
+
+=== TEST 56: do not use replace_filter at all
+--- config
+    default_type text/plain;
+    replace_filter_types text/css text/plain;
+    location /t {
+        echo abc;
+        replace_filter_types text/css;
+    }
+--- request
+GET /t
+--- response_body
+abc
+--- no_error_log
+[alert]
+[error]
+
