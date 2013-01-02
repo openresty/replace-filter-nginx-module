@@ -354,7 +354,7 @@ helloX, X world
 
 
 
-=== TEST 17: replace_types default to text/html
+=== TEST 17: replace_filter_types default to text/html
 --- config
     default_type text/plain;
     location /t {
@@ -371,7 +371,7 @@ abc
 
 
 
-=== TEST 18: custom replace_types
+=== TEST 18: custom replace_filter_types
 --- config
     default_type text/plain;
     location /t {
@@ -389,7 +389,7 @@ aXc
 
 
 
-=== TEST 19: multiple replace_types settings
+=== TEST 19: multiple replace_filter_types settings
 --- config
     default_type text/plain;
     location /t {
@@ -1399,6 +1399,43 @@ blah  */ b
 
 
 "
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 54: multiple replace_filter_types settings (server level)
+--- config
+    default_type text/plain;
+    replace_filter_types text/css text/plain;
+    location /t {
+        echo abc;
+        replace_filter b X;
+    }
+--- request
+GET /t
+--- response_body
+aXc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 55: multiple replace_filter_types settings (server level, but overridding in location)
+--- config
+    default_type text/plain;
+    replace_filter_types text/css text/plain;
+    location /t {
+        echo abc;
+        replace_filter_types text/html;
+        replace_filter b X;
+    }
+--- request
+GET /t
+--- response_body
+abc
 --- no_error_log
 [alert]
 [error]
