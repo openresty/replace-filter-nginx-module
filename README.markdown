@@ -29,6 +29,21 @@ Synopsis
         replace_filter_types text/plain text/css;
     }
 
+    location /a {
+        # proxy_pass/fastcgi_pass/...
+
+        # remove line-leading spaces and line-trailing spaces,
+        # as well as blank lines:
+        replace_filter '^\s+|\s+$' '' g;
+    }
+
+    location /b {
+        # proxy_pass/fastcgi_pass/...
+
+        # only remove line-leading spaces and line-trailing spaces:
+        replace_filter '^[ \f\t]+|[ \f\t]+$' '' g;
+    }
+
 Description
 ===========
 
