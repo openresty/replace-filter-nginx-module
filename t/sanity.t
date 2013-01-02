@@ -371,7 +371,7 @@ abc
 
 
 
-==== TEST 17: custom replace_types
+=== TEST 18: custom replace_types
 --- config
     default_type text/plain;
     location /t {
@@ -389,7 +389,7 @@ aXc
 
 
 
-=== TEST 18: multiple replace_types settings
+=== TEST 19: multiple replace_types settings
 --- config
     default_type text/plain;
     location /t {
@@ -407,7 +407,7 @@ aXc
 
 
 
-=== TEST 19: trim leading spaces
+=== TEST 20: trim leading spaces
 --- config
     default_type text/html;
     location /a.html {
@@ -435,7 +435,7 @@ abc
 
 
 
-=== TEST 20: trim trailing spaces
+=== TEST 21: trim trailing spaces
 --- config
     default_type text/html;
     location /a.html {
@@ -463,7 +463,7 @@ abc
 
 
 
-=== TEST 21: trim both leading and trailing spaces
+=== TEST 22: trim both leading and trailing spaces
 --- config
     default_type text/html;
     location /a.html {
@@ -491,7 +491,7 @@ abc
 
 
 
-=== TEST 22: pure flush buf in the stream (no data)
+=== TEST 23: pure flush buf in the stream (no data)
 --- config
     default_type text/html;
     location = /t {
@@ -507,7 +507,7 @@ GET /t
 
 
 
-=== TEST 23: pure flush buf in the stream (with data)
+=== TEST 24: pure flush buf in the stream (with data)
 --- config
     default_type text/html;
     location = /t {
@@ -526,7 +526,7 @@ X
 
 
 
-=== TEST 24: trim both leading and trailing spaces (1 byte at a time)
+=== TEST 25: trim both leading and trailing spaces (1 byte at a time)
 --- config
     default_type text/html;
     location = /t {
@@ -556,7 +556,7 @@ b
 
 
 
-=== TEST 25: trim both leading and trailing spaces (1 byte at a time), no \s for $
+=== TEST 26: trim both leading and trailing spaces (1 byte at a time), no \s for $
 --- config
     default_type text/html;
     location = /t {
@@ -586,7 +586,7 @@ b
 
 
 
-=== TEST 26: trim both leading and trailing spaces (1 byte at a time)
+=== TEST 27: trim both leading and trailing spaces (1 byte at a time)
 --- config
     default_type text/html;
     location /a.html {
@@ -634,7 +634,7 @@ abc
 
 
 
-=== TEST 27: \b at the border
+=== TEST 28: \b at the border
 --- config
     default_type text/html;
     location /t {
@@ -652,7 +652,7 @@ Xb
 
 
 
-=== TEST 28: \B at the border
+=== TEST 29: \B at the border
 --- config
     default_type text/html;
     location /t {
@@ -670,7 +670,7 @@ X,
 
 
 
-=== TEST 29: \A at the border
+=== TEST 30: \A at the border
 --- config
     default_type text/html;
     location /t {
@@ -688,7 +688,7 @@ Xb
 
 
 
-=== TEST 30: memory bufs with last_buf=1
+=== TEST 31: memory bufs with last_buf=1
 --- config
     default_type text/html;
     location /t {
@@ -706,7 +706,7 @@ X
 
 
 
-=== TEST 31: trim both leading and trailing spaces (2 bytes at a time)
+=== TEST 32: trim both leading and trailing spaces (2 bytes at a time)
 --- config
     default_type text/html;
     location /a.html {
@@ -756,7 +756,7 @@ abc
 
 
 
-=== TEST 32: trim both leading and trailing spaces (3 bytes at a time)
+=== TEST 33: trim both leading and trailing spaces (3 bytes at a time)
 --- config
     default_type text/html;
     location /a.html {
@@ -809,7 +809,7 @@ abc
 
 
 
-=== TEST 33: github issue #2: error "general look-ahead not supported"
+=== TEST 34: github issue #2: error "general look-ahead not supported"
 --- config
     location /t {
          charset utf-8;
@@ -828,7 +828,7 @@ Xbc
 
 
 
-=== TEST 34: backtrack to the middle of a pending capture (pending: output|capture + rematch)
+=== TEST 35: backtrack to the middle of a pending capture (pending: output|capture + rematch)
 --- config
     default_type text/html;
     location = /t {
@@ -857,7 +857,7 @@ aXcd
 
 
 
-=== TEST 35: backtrack to the middle of a pending capture (pending: output + capture|rematch
+=== TEST 36: backtrack to the middle of a pending capture (pending: output + capture|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -886,7 +886,7 @@ aXcd
 
 
 
-=== TEST 36: backtrack to the middle of a pending capture (pending: output + capture + rematch
+=== TEST 37: backtrack to the middle of a pending capture (pending: output + capture + rematch
 --- config
     default_type text/html;
     location = /t {
@@ -916,7 +916,7 @@ aXcd
 
 
 
-=== TEST 37: backtrack to the middle of a pending capture (pending: output|capture|rematch
+=== TEST 38: backtrack to the middle of a pending capture (pending: output|capture|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -944,7 +944,7 @@ aXcd
 
 
 
-=== TEST 38: backtrack to the middle of a pending capture (pending: output|capture|rematch(2)
+=== TEST 39: backtrack to the middle of a pending capture (pending: output|capture|rematch(2)
 --- config
     default_type text/html;
     location = /t {
@@ -972,7 +972,7 @@ aXccd
 
 
 
-=== TEST 39: backtrack to the middle of a pending capture (pending: output|capture(2)|rematch
+=== TEST 40: backtrack to the middle of a pending capture (pending: output|capture(2)|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -1000,7 +1000,7 @@ aXcd
 
 
 
-=== TEST 40: backtrack to the middle of a pending capture (pending: output(2)|capture|rematch
+=== TEST 41: backtrack to the middle of a pending capture (pending: output(2)|capture|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -1028,7 +1028,7 @@ aaXcd
 
 
 
-=== TEST 41: backtrack to the beginning of a pending capture (pending: output + capture|rematch(2)
+=== TEST 42: backtrack to the beginning of a pending capture (pending: output + capture|rematch(2)
 --- config
     default_type text/html;
     location = /t {
@@ -1057,7 +1057,7 @@ aXccd
 
 
 
-=== TEST 42: backtrack to the beginning of a pending capture (pending: output + capture(2)|rematch
+=== TEST 43: backtrack to the beginning of a pending capture (pending: output + capture(2)|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -1086,7 +1086,7 @@ aXcd
 
 
 
-=== TEST 43: backtrack to the middle of a pending capture (pending: output(2) + capture|rematch
+=== TEST 44: backtrack to the middle of a pending capture (pending: output(2) + capture|rematch
 --- config
     default_type text/html;
     location = /t {
@@ -1115,7 +1115,7 @@ aaXcd
 
 
 
-=== TEST 44: assertions across AGAIN
+=== TEST 45: assertions across AGAIN
 --- config
     default_type text/html;
     location = /t {
@@ -1144,7 +1144,7 @@ X
 
 
 
-=== TEST 45: assertions when capture backtracking happens
+=== TEST 46: assertions when capture backtracking happens
 --- config
     default_type text/html;
     location = /t {
@@ -1176,7 +1176,7 @@ aXcdf
 
 
 
-=== TEST 46: assertions when capture backtracking happens (2 pending matches)
+=== TEST 47: assertions when capture backtracking happens (2 pending matches)
 --- config
     default_type text/html;
     location = /t {
@@ -1208,7 +1208,7 @@ aXXdf
 
 
 
-=== TEST 47: github issue #2: error "general look-ahead not supported", no "g"
+=== TEST 48: github issue #2: error "general look-ahead not supported", no "g"
 --- config
     location /t {
          charset utf-8;
@@ -1222,6 +1222,55 @@ GET /t
 --- stap2 eval: $::StapOutputChains
 --- response_body
 Xbc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 49: nested rematch bufs
+--- config
+    location /t {
+         default_type text/html;
+         echo -n a;
+         echo -n b;
+         echo -n c;
+         echo -n d;
+         echo -n e;
+         echo g;
+         #echo abcdeg;
+         replace_filter 'abcdef|b|cdf|c' X g;
+     }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- response_body
+aXXdeg
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 50: nested rematch bufs (splitting pending buf)
+--- config
+    location /t {
+         default_type text/html;
+         echo -n a;
+         echo -n b;
+         echo -n cd;
+         echo -n e;
+         echo -n f;
+         echo -n g;
+         echo i;
+         #echo abcdefh;
+         replace_filter 'abcdefgh|b|cdeg|d' X g;
+     }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- response_body
+aXcXefgi
 --- no_error_log
 [alert]
 [error]

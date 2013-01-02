@@ -67,7 +67,7 @@ typedef struct {
 static ngx_int_t ngx_http_replace_output(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx);
 static ngx_int_t ngx_http_replace_parse(ngx_http_request_t *r,
-    ngx_http_replace_ctx_t *ctx);
+    ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch);
 
 static char * ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
@@ -220,7 +220,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
     ngx_int_t                  rc;
     ngx_buf_t                 *b;
-    ngx_chain_t               *cl, *cur = NULL;
+    ngx_chain_t               *cl, *cur = NULL, *rematch = NULL;
 
     ngx_http_replace_ctx_t        *ctx;
     ngx_http_replace_loc_conf_t   *slcf;
@@ -284,7 +284,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         while (ctx->pos < ctx->buf->last
                || (ctx->special_buf && ctx->last_buf))
         {
-            rc = ngx_http_replace_parse(r, ctx);
+            rc = ngx_http_replace_parse(r, ctx, rematch);
 
             ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                            "replace filter parse: %d, %p-%p",
@@ -357,7 +357,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 break;
             }
 
-            /* rc == NGX_OK */
+            /* rc == NGX_OK || rc == NGX_BUSY */
 
             cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
             if (cl == NULL) {
@@ -388,7 +388,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             ctx->once = slcf->once;
 
-            if (cur && ctx->rematch) {
+            if (rc == NGX_BUSY) {
                 dd("goto rematch");
                 goto rematch;
             }
@@ -428,6 +428,12 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             ctx->stream_pos += ctx->buf->last - ctx->buf->pos;
         }
 
+        if (rematch) {
+            rematch->next = ctx->free;
+            ctx->free = rematch;
+            rematch = NULL;
+        }
+
 rematch:
         dd("ctx->rematch: %p", ctx->rematch);
 
@@ -447,7 +453,8 @@ rematch:
             dd("ctx->buf set to rematch buf %p, len=%d, next=%p",
                ctx->buf, (int) ngx_buf_size(ctx->buf), ctx->rematch->next);
 
-            ctx->rematch = ctx->rematch->next;
+            rematch = ctx->rematch;
+            ctx->rematch = rematch->next;
 
             ctx->pos = ctx->buf->pos;
             ctx->special_buf = ngx_buf_special(ctx->buf);
@@ -592,9 +599,10 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
 
 static ngx_int_t
-ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
+ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
+    ngx_chain_t *rematch)
 {
-    int                    rc, from, to, file_last;
+    int                    rc, from, to, file_last, new_rematch;
     size_t                 len;
     ngx_buf_t             *b;
     ngx_chain_t           *cl, *newcl, *pending, **ll, **last_pending;
@@ -650,6 +658,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
         dd("non-empty $& capture");
 
+        new_rematch = 0;
+
         if (from >= ctx->stream_pos) {
 
             if (ctx->pending) {
@@ -669,6 +679,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
         }
 
         ll = &ctx->pending;
+
         for (cl = ctx->pending; cl; ll = &cl->next, cl = cl->next) {
             dd("checking pending buf %d-%d against capture (%d, %d)",
                (int) cl->buf->file_pos, (int) cl->buf->file_last,
@@ -745,8 +756,15 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
                             /* pre-append the chain starting from cl to
                              * ctx->remain */
 
+                            dd("existing rematch: %p", ctx->rematch);
+
+                            if (rematch) {
+                                ctx->rematch = rematch;
+                            }
+
                             *last_pending = ctx->rematch;
                             ctx->rematch = cl;
+                            new_rematch = 1;
 
                             break;
                         }
@@ -809,8 +827,15 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
                         /* pre-append the chain starting from cl to
                          * ctx->remain */
 
+                        dd("existing rematch: %p", ctx->rematch);
+
+                        if (rematch) {
+                            ctx->rematch = rematch;
+                        }
+
                         *ctx->last_pending = ctx->rematch;
                         ctx->rematch = cl;
+                        new_rematch = 1;
 
                         /* break from the ctx->pending chain */
                         *ll = NULL;
@@ -838,6 +863,18 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
             ctx->last_out = ctx->last_pending;
         }
 
+#if (DDEBUG)
+        if (ctx->rematch == NULL) {
+            dd("empty ctx->rematch");
+        }
+
+        for (cl = ctx->rematch; cl; cl = cl->next) {
+            dd("ctx->rematch buf: \"%.*s\" last_buf=%d, sync=%d, flush=%d",
+               (int) ngx_buf_size(cl->buf), cl->buf->pos, cl->buf->last_buf,
+               cl->buf->sync, cl->buf->flush);
+        }
+#endif
+
         ctx->pending = NULL;
         ctx->last_pending = &ctx->pending;
 
@@ -847,7 +884,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 done:
         ctx->pos = ctx->buf->pos + (to - ctx->stream_pos);
 
-        return NGX_OK;
+        return new_rematch ? NGX_BUSY : NGX_OK;
 
     case SRE_AGAIN:
         from = ctx->ovector[0];
