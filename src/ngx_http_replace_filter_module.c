@@ -19,6 +19,11 @@
 
 
 typedef struct {
+    sre_pool_t              *compiler_pool;
+} ngx_http_replace_main_conf_t;
+
+
+typedef struct {
     ngx_str_t                  match;
     ngx_str_t                  value;
 
@@ -78,6 +83,7 @@ static ngx_int_t ngx_http_replace_filter_init(ngx_conf_t *cf);
 void ngx_http_replace_cleanup_pool(void *data);
 static ngx_chain_t * ngx_http_replace_get_free_buf(ngx_pool_t *p,
     ngx_chain_t **free);
+static void * ngx_http_replace_create_main_conf(ngx_conf_t *cf);
 
 
 static ngx_command_t  ngx_http_replace_filter_commands[] = {
@@ -102,9 +108,9 @@ static ngx_command_t  ngx_http_replace_filter_commands[] = {
 
 static ngx_http_module_t  ngx_http_replace_filter_module_ctx = {
     NULL,                                  /* preconfiguration */
-    ngx_http_replace_filter_init,              /* postconfiguration */
+    ngx_http_replace_filter_init,          /* postconfiguration */
 
-    NULL,                                  /* create main configuration */
+    ngx_http_replace_create_main_conf,     /* create main configuration */
     NULL,                                  /* init main configuration */
 
     NULL,                                  /* create server configuration */
@@ -140,13 +146,13 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
 {
     ngx_pool_cleanup_t            *cln;
     ngx_http_replace_ctx_t        *ctx;
-    ngx_http_replace_loc_conf_t  *slcf;
+    ngx_http_replace_loc_conf_t  *rlcf;
 
-    slcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
+    rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
-    if (slcf->match.len == 0
+    if (rlcf->match.len == 0
         || r->headers_out.content_length_n == 0
-        || ngx_http_test_content_type(r, &slcf->types) == NULL)
+        || ngx_http_test_content_type(r, &rlcf->types) == NULL)
     {
         return ngx_http_next_header_filter(r);
     }
@@ -159,7 +165,7 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
     ctx->last_special = &ctx->special;
     ctx->last_pending = &ctx->pending;
 
-    ctx->ovector = ngx_palloc(r->pool, slcf->ovecsize);
+    ctx->ovector = ngx_palloc(r->pool, rlcf->ovecsize);
     if (ctx->ovector == NULL) {
         return NGX_ERROR;
     }
@@ -180,8 +186,8 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
     cln->data = ctx->vm_pool;
     cln->handler = ngx_http_replace_cleanup_pool;
 
-    ctx->vm_ctx = sre_vm_pike_create_ctx(ctx->vm_pool, slcf->program,
-                                         ctx->ovector, slcf->ovecsize);
+    ctx->vm_ctx = sre_vm_pike_create_ctx(ctx->vm_pool, rlcf->program,
+                                         ctx->ovector, rlcf->ovecsize);
     if (ctx->vm_ctx == NULL) {
         return NGX_ERROR;
     }
@@ -223,9 +229,9 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_chain_t               *cl, *cur = NULL, *rematch = NULL;
 
     ngx_http_replace_ctx_t        *ctx;
-    ngx_http_replace_loc_conf_t   *slcf;
+    ngx_http_replace_loc_conf_t   *rlcf;
 
-    slcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
+    rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
     ctx = ngx_http_get_module_ctx(r, ngx_http_replace_filter_module);
 
@@ -368,13 +374,13 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             dd("free data buf: %p", b);
 
-            dd("emit replaced value: \"%.*s\"", (int) slcf->value.len,
-               slcf->value.data);
+            dd("emit replaced value: \"%.*s\"", (int) rlcf->value.len,
+               rlcf->value.data);
 
-            if (slcf->value.len) {
+            if (rlcf->value.len) {
                 b->memory = 1;
-                b->pos = slcf->value.data;
-                b->last = slcf->value.data + slcf->value.len;
+                b->pos = rlcf->value.data;
+                b->last = rlcf->value.data + rlcf->value.len;
 
             } else {
                 b->sync = 1;
@@ -386,7 +392,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             *ctx->last_out = cl;
             ctx->last_out = &cl->next;
 
-            ctx->once = slcf->once;
+            ctx->once = rlcf->once;
 
             if (rc == NGX_BUSY) {
                 dd("goto rematch");
@@ -1074,31 +1080,29 @@ done:
 static char *
 ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
-    ngx_http_replace_loc_conf_t *slcf = conf;
+    ngx_http_replace_loc_conf_t     *rlcf = conf;
+    ngx_http_replace_main_conf_t    *rmcf;
 
     int              flags = 0;
     u_char          *p;
     ngx_str_t       *value;
     ngx_uint_t       i;
     sre_pool_t      *ppool; /* parser pool */
-    sre_pool_t      *cpool; /* compiler pool */
     sre_regex_t     *re;
     sre_program_t   *prog;
 
-    ngx_pool_cleanup_t            *cln;
-
-    if (slcf->match.len) {
+    if (rlcf->match.len) {
         return "is duplicate";
     }
 
     value = cf->args->elts;
 
-    slcf->match = value[1];
+    rlcf->match = value[1];
 
     /* XXX check variable usage in the value */
-    slcf->value = value[2];
+    rlcf->value = value[2];
 
-    slcf->once = 1;  /* default to once */
+    rlcf->once = 1;  /* default to once */
 
     if (cf->args->nelts == 4) {
         /* 3 user args */
@@ -1112,7 +1116,7 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
                 break;
 
             case 'g':
-                slcf->once = 0;
+                rlcf->once = 0;
                 break;
 
             default:
@@ -1128,43 +1132,35 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     dd("regex: %s", value[1].data);
 
-    re = sre_regex_parse(ppool, value[1].data, &slcf->ncaps, flags);
+    re = sre_regex_parse(ppool, value[1].data, &rlcf->ncaps, flags);
     if (re == NULL) {
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "failed to parse regex \"%V\"", &slcf->match);
+                           "failed to parse regex \"%V\"", &rlcf->match);
 
         sre_destroy_pool(ppool);
         return NGX_CONF_ERROR;
     }
 
-    cpool = sre_create_pool(1024);
-    if (cpool == NULL) {
+    rmcf =
+        ngx_http_conf_get_module_main_conf(cf, ngx_http_replace_filter_module);
+
+    if (rmcf->compiler_pool == NULL) {
         sre_destroy_pool(ppool);
         return NGX_CONF_ERROR;
     }
 
-    cln = ngx_pool_cleanup_add(cf->pool, 0);
-    if (cln == NULL) {
-        sre_destroy_pool(ppool);
-        sre_destroy_pool(cpool);
-        return NGX_CONF_ERROR;
-    }
-
-    cln->data = cpool;
-    cln->handler = ngx_http_replace_cleanup_pool;
-
-    prog = sre_regex_compile(cpool, re);
+    prog = sre_regex_compile(rmcf->compiler_pool, re);
 
     sre_destroy_pool(ppool);
 
     if (prog == NULL) {
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "failed to compile regex \"%V\"", &slcf->match);
+                           "failed to compile regex \"%V\"", &rlcf->match);
         return NGX_CONF_ERROR;
     }
 
-    slcf->program = prog;
-    slcf->ovecsize = 2 * (slcf->ncaps + 1) * sizeof(int);
+    rlcf->program = prog;
+    rlcf->ovecsize = 2 * (rlcf->ncaps + 1) * sizeof(int);
 
     /* TODO register a pool cleanup handler to destroy ppool */
 
@@ -1175,10 +1171,10 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static void *
 ngx_http_replace_create_conf(ngx_conf_t *cf)
 {
-    ngx_http_replace_loc_conf_t  *slcf;
+    ngx_http_replace_loc_conf_t  *rlcf;
 
-    slcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_replace_loc_conf_t));
-    if (slcf == NULL) {
+    rlcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_replace_loc_conf_t));
+    if (rlcf == NULL) {
         return NULL;
     }
 
@@ -1194,9 +1190,9 @@ ngx_http_replace_create_conf(ngx_conf_t *cf)
      *     conf->ovecsize = 0;
      */
 
-    slcf->once = NGX_CONF_UNSET;
+    rlcf->once = NGX_CONF_UNSET;
 
-    return slcf;
+    return rlcf;
 }
 
 
@@ -1253,4 +1249,33 @@ ngx_http_replace_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
 
     ngx_memzero(cl->buf, sizeof(ngx_buf_t));
     return cl;
+}
+
+
+static void *
+ngx_http_replace_create_main_conf(ngx_conf_t *cf)
+{
+    ngx_pool_cleanup_t              *cln;
+    ngx_http_replace_main_conf_t    *rmcf;
+
+    rmcf = ngx_palloc(cf->pool, sizeof(ngx_http_replace_main_conf_t));
+    if (rmcf == NULL) {
+        return NULL;
+    }
+
+    rmcf->compiler_pool = sre_create_pool(4096);
+    if (rmcf->compiler_pool == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    cln = ngx_pool_cleanup_add(cf->pool, 0);
+    if (cln == NULL) {
+        sre_destroy_pool(rmcf->compiler_pool);
+        return NGX_CONF_ERROR;
+    }
+
+    cln->data = rmcf->compiler_pool;
+    cln->handler = ngx_http_replace_cleanup_pool;
+
+    return rmcf;
 }
