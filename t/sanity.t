@@ -553,7 +553,6 @@ b
 --- no_error_log
 [alert]
 [error]
---- SKIP
 
 
 
@@ -588,7 +587,6 @@ b
 
 
 === TEST 26: trim both leading and trailing spaces (1 byte at a time)
---- SKIP
 --- config
     default_type text/html;
     location /a.html {
@@ -1110,6 +1108,99 @@ F(ngx_palloc) {
 GET /t
 --- response_body
 aaXcd
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 44: assertions across AGAIN
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n "\n";
+        echo b;
+        replace_filter 'a\n^b' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+X
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 45: assertions when capture backtracking happens
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n b;
+        echo -n c;
+        echo -n d;
+        echo f;
+        #echo abcdf;
+        replace_filter 'abcde|b|\bc' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXcdf
+
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 46: assertions when capture backtracking happens (2 pending matches)
+--- config
+    default_type text/html;
+    location = /t {
+        echo -n a;
+        echo -n b;
+        echo -n ' ';
+        echo -n d;
+        echo f;
+        #echo ab df;
+        replace_filter 'ab de|b|b |\b ' 'X' g;
+    }
+
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /t
+--- response_body
+aXXdf
 
 --- no_error_log
 [alert]
