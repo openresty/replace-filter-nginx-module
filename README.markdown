@@ -112,7 +112,7 @@ assuming that your sregex is installed to the prefix `/opt/sregex`.
 TODO
 ====
 
-* implement multiple `replace_filter` directives in the same location. All the patterns will be applied as in a tokenizer.
+* implement multiple `replace_filter` directives in a single location. All the patterns will be applied at the same time as in a tokenizer. We will *not* use the longest token match semantics, but rather, patterns will be prioritized according to their order in the configure file.
 * reduce the amount of data that has to be buffered for when an partial match is already found.
 * recycle the memory blocks used to buffer the pending capture data.
 
