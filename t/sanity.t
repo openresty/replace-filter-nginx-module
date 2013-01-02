@@ -1206,3 +1206,23 @@ aXXdf
 [alert]
 [error]
 
+
+
+=== TEST 47: github issue #2: error "general look-ahead not supported", no "g"
+--- config
+    location /t {
+         charset utf-8;
+         default_type text/html;
+         echo "ABCabcABCabc";
+         #replace_filter_types text/plain;
+         replace_filter "a.+a" "X" "i";
+     }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- response_body
+Xbc
+--- no_error_log
+[alert]
+[error]
+

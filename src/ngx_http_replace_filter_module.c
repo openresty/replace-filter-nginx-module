@@ -322,7 +322,6 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                (int) (ctx->copy_end - ctx->copy_start), ctx->special_buf);
 
             if (ctx->copy_start != ctx->copy_end && !ctx->special_buf) {
-
                 dd("copy: %.*s", (int) (ctx->copy_end - ctx->copy_start),
                    ctx->copy_start);
 
@@ -348,7 +347,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             if (rc == NGX_AGAIN) {
                 if (ctx->special_buf && ctx->last_buf) {
-                    return NGX_ERROR;
+                    break;
                 }
 
                 continue;
@@ -430,6 +429,8 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
 rematch:
+        dd("ctx->rematch: %p", ctx->rematch);
+
         if (ctx->rematch == NULL) {
             ctx->buf = NULL;
             cur = NULL;
@@ -611,10 +612,10 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
     len = ctx->buf->last - ctx->pos;
 
     dd("=== process data chunk %p len=%d, pos=%u, special=%u, "
-       "last=%u, \"%.*s\"", ctx->buf, (int) len,
+       "last=%u, \"%.*s\"", ctx->buf, (int) (ctx->buf->last - ctx->pos),
        (int) (ctx->pos - ctx->buf->pos + ctx->stream_pos),
        ctx->special_buf, ctx->last_buf,
-       (int) len, ctx->pos);
+       (int) (ctx->buf->last - ctx->pos), ctx->pos);
 
     rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf);
 
@@ -728,7 +729,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
                             }
 
                             dd("found the boundary, pending buf \"%.*s\" is "
-                               "the first data buf that needs re-matching",
+                               "the first data buf that needs rematching",
                                (int) ngx_buf_size(cl->buf), cl->buf->pos);
 
                             dd("adjust the pending buf %p to start from "
