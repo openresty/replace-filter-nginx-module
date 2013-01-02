@@ -69,6 +69,10 @@ The following regex options are supported:
 * `i`
 : for case-insensitive matching
 
+Multiple options can be combined in a single string argument, for example:
+
+    replace_filter hello hiya ig;
+
 replace_filter_types
 --------------------
 
