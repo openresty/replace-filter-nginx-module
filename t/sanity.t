@@ -1275,3 +1275,93 @@ aXcXefgi
 [alert]
 [error]
 
+
+
+=== TEST 51: remove C/C++ comments (1 byte at a time)
+--- config
+    default_type text/html;
+    location /a.html {
+        internal;
+    }
+
+    location = /t {
+        content_by_lua '
+            local res = ngx.location.capture("/a.html")
+            local txt = res.body
+            for i = 1, string.len(txt) do
+                ngx.print(string.sub(txt, i, i))
+                ngx.flush(true)
+            end
+        ';
+        replace_filter '/\*.*?\*/|//[^\n]*' '' g;
+    }
+--- user_files
+>>> a.html
+ i don't know   // hello // world /* */
+hello world /** abc * b/c /*
+    hello ** // world
+    *
+    */
+blah /* hi */ */ b
+//
+///hi
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- request
+GET /t
+--- response_body eval
+" i don't know   
+hello world 
+blah  */ b
+
+
+"
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 52: remove C/C++ comments (all at a time)
+--- config
+    default_type text/html;
+
+    location /a.html {
+        replace_filter '/\*.*?\*/|//[^\n]*' '' g;
+    }
+
+--- user_files
+>>> a.html
+ i don't know   // hello // world /* */
+hello world /** abc * b/c /*
+    hello ** // world
+    *
+    */
+blah /* hi */ */ b
+//
+///hi
+--- stap2
+F(ngx_palloc) {
+    if ($size < 0) {
+        print_ubacktrace()
+        exit()
+    }
+}
+--- request
+GET /a.html
+--- response_body eval
+" i don't know   
+hello world 
+blah  */ b
+
+
+"
+--- no_error_log
+[alert]
+[error]
+

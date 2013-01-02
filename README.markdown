@@ -30,7 +30,7 @@ Synopsis
     }
 
     location /a {
-        # proxy_pass/fastcgi_pass/...
+        # proxy_pass/fastcgi_pass/root/...
 
         # remove line-leading spaces and line-trailing spaces,
         # as well as blank lines:
@@ -38,10 +38,17 @@ Synopsis
     }
 
     location /b {
-        # proxy_pass/fastcgi_pass/...
+        # proxy_pass/fastcgi_pass/root/...
 
         # only remove line-leading spaces and line-trailing spaces:
         replace_filter '^[ \f\t]+|[ \f\t]+$' '' g;
+    }
+
+    location ~ '.cpp$' {
+        # proxy_pass/fastcgi_pass/root/...
+
+        # remove all those ugly C/C++ comments:
+        replace_filter '/\*.*?\*/|//[^\n]*' '' g;
     }
 
 Description
