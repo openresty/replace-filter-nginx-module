@@ -72,9 +72,11 @@ Directives
 
 replace_filter
 --------------
+**syntax:** *replace_filter &lt;regex&gt; &lt;replace&gt;*
+
 **syntax:** *replace_filter &lt;regex&gt; &lt;replace&gt; &lt;options&gt;*
 
-**default:** *replace_filter &lt;regex&gt; &lt;replace&gt; ""*
+**default:** *no*
 
 **context:** *http, server, location*
 
@@ -87,9 +89,9 @@ By default, the filter topped matching after the first match is found. This beha
 The following regex options are supported:
 
 * `g`
-: for global search and substituion
+: for global search and substituion (default off)
 * `i`
-: for case-insensitive matching
+: for case-insensitive matching (default off)
 
 Multiple options can be combined in a single string argument, for example:
 
