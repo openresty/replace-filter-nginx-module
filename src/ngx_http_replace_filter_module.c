@@ -18,6 +18,9 @@
 #include <sregex/sregex.h>
 
 
+#define SREGEX_COMPILER_POOL_SIZE  4096
+
+
 typedef struct {
     sre_pool_t              *compiler_pool;
 } ngx_http_replace_main_conf_t;
@@ -1091,6 +1094,8 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     sre_regex_t     *re;
     sre_program_t   *prog;
 
+    ngx_pool_cleanup_t              *cln;
+
     if (rlcf->match.len) {
         return "is duplicate";
     }
@@ -1145,8 +1150,22 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         ngx_http_conf_get_module_main_conf(cf, ngx_http_replace_filter_module);
 
     if (rmcf->compiler_pool == NULL) {
-        sre_destroy_pool(ppool);
-        return NGX_CONF_ERROR;
+        rmcf->compiler_pool = sre_create_pool(SREGEX_COMPILER_POOL_SIZE);
+        if (rmcf->compiler_pool == NULL) {
+            sre_destroy_pool(ppool);
+            return NGX_CONF_ERROR;
+        }
+
+        cln = ngx_pool_cleanup_add(cf->pool, 0);
+        if (cln == NULL) {
+            sre_destroy_pool(rmcf->compiler_pool);
+            rmcf->compiler_pool = NULL;
+            sre_destroy_pool(ppool);
+            return NGX_CONF_ERROR;
+        }
+
+        cln->data = rmcf->compiler_pool;
+        cln->handler = ngx_http_replace_cleanup_pool;
     }
 
     prog = sre_regex_compile(rmcf->compiler_pool, re);
@@ -1255,27 +1274,16 @@ ngx_http_replace_get_free_buf(ngx_pool_t *p, ngx_chain_t **free)
 static void *
 ngx_http_replace_create_main_conf(ngx_conf_t *cf)
 {
-    ngx_pool_cleanup_t              *cln;
     ngx_http_replace_main_conf_t    *rmcf;
 
-    rmcf = ngx_palloc(cf->pool, sizeof(ngx_http_replace_main_conf_t));
+    rmcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_replace_main_conf_t));
     if (rmcf == NULL) {
         return NULL;
     }
 
-    rmcf->compiler_pool = sre_create_pool(4096);
-    if (rmcf->compiler_pool == NULL) {
-        return NGX_CONF_ERROR;
-    }
-
-    cln = ngx_pool_cleanup_add(cf->pool, 0);
-    if (cln == NULL) {
-        sre_destroy_pool(rmcf->compiler_pool);
-        return NGX_CONF_ERROR;
-    }
-
-    cln->data = rmcf->compiler_pool;
-    cln->handler = ngx_http_replace_cleanup_pool;
+    /* set by ngx_pcalloc:
+     *      rmcf->compiler_pool = NULL;
+     */
 
     return rmcf;
 }
