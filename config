@@ -4,17 +4,18 @@ ngx_feature_name=
 ngx_feature_run=no
 ngx_feature_incs="#include <sregex/sregex.h>"
 ngx_feature_path=
-ngx_feature_test="sre_regex_t       *re;
-                  sre_program_t     *prog;
-                  sre_pool_t        *pool;
-                  u_char             s[] = {'a', 'b', 'c'};
-                  int                a, offset;
-                  sre_vm_pike_ctx_t           *pctx;
+ngx_feature_test="sre_regex_t        *re;
+                  sre_program_t      *prog;
+                  sre_pool_t         *pool;
+                  u_char              s[] = {'a', 'b', 'c'};
+                  sre_int_t           rc, err_offset, ovector;
+                  sre_uint_t          ncaps;
+                  sre_vm_pike_ctx_t  *pctx;
                   pool = sre_create_pool(1024);
-                  re = sre_regex_parse(pool, s, &a, 0, &offset);
+                  re = sre_regex_parse(pool, s, &ncaps, 0, &err_offset);
                   prog = sre_regex_compile(pool, re);
-                  pctx = sre_vm_pike_create_ctx(pool, prog, &a, 0);
-                  a = sre_vm_pike_exec(pctx, s, 32, 1);
+                  pctx = sre_vm_pike_create_ctx(pool, prog, &ovector, 0);
+                  rc = sre_vm_pike_exec(pctx, s, 32, 1);
                   sre_destroy_pool(pool)"
 
 if [ -n "$SREGEX_INC" -o -n "$SREGEX_LIB" ]; then

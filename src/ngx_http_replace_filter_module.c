@@ -33,8 +33,8 @@ typedef struct {
     ngx_hash_t                 types;
 
     ngx_flag_t                 once;
-    unsigned                   ncaps;
-    unsigned                   ovecsize;
+    sre_uint_t                 ncaps;
+    size_t                     ovecsize;
     sre_program_t             *program;
 
     ngx_array_t               *types_keys;
@@ -42,8 +42,8 @@ typedef struct {
 
 
 typedef struct {
-    int                        stream_pos;
-    int                       *ovector;
+    sre_int_t                  stream_pos;
+    sre_int_t                 *ovector;
     sre_pool_t                *vm_pool;
     sre_vm_pike_ctx_t         *vm_ctx;
 
@@ -611,7 +611,9 @@ static ngx_int_t
 ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
     ngx_chain_t *rematch)
 {
-    int                    rc, from, to, file_last, new_rematch;
+    sre_int_t              rc, from, to;
+    off_t                  file_last;
+    unsigned               new_rematch;
     size_t                 len;
     ngx_buf_t             *b;
     ngx_chain_t           *cl, *newcl, *pending, **ll, **last_pending;
@@ -636,14 +638,14 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
     rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf);
 
-    dd("vm pike exec: %d", rc);
+    dd("vm pike exec: %d", (int) rc);
 
     switch (rc) {
     case SRE_OK:
         from = ctx->ovector[0];
         to = ctx->ovector[1];
 
-        dd("pike vm ok: (%d, %d)", from, to);
+        dd("pike vm ok: (%d, %d)", (int) from, (int) to);
 
         if (from == to) {
             dd("empty $& capture");
@@ -692,7 +694,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
         for (cl = ctx->pending; cl; ll = &cl->next, cl = cl->next) {
             dd("checking pending buf %d-%d against capture (%d, %d)",
                (int) cl->buf->file_pos, (int) cl->buf->file_last,
-               from, to);
+               (int) from, (int) to);
 
             if (cl->buf->file_pos < to && cl->buf->file_last > from) {
                 dd("pending buf \"%.*s\" overlapped with the capture",
@@ -796,7 +798,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 }
 
                 dd("discard cl and its following chains, to=%d, stream_pos=%d",
-                   to, ctx->stream_pos);
+                   (int) to, (int) ctx->stream_pos);
 
                 if (to < ctx->stream_pos) {
                     dd("collect pending bufs that need to be matched again");
@@ -899,7 +901,7 @@ done:
         from = ctx->ovector[0];
         to = ctx->ovector[1];
 
-        dd("pike vm again: (%d, %d)", from, to);
+        dd("pike vm again: (%d, %d)", (int) from, (int) to);
 
         if (from == -1) {
             return NGX_ERROR;
@@ -909,8 +911,8 @@ done:
             to = ctx->stream_pos + (ctx->buf->last - ctx->buf->pos);
         }
 
-        dd("pike vm again (adjusted): stream pos:%d, (%d, %d)", ctx->stream_pos,
-           from, to);
+        dd("pike vm again (adjusted): stream pos:%d, (%d, %d)",
+           (int) ctx->stream_pos, (int) from, (int) to);
 
         if (to < from) {
             return NGX_ERROR;
@@ -973,7 +975,7 @@ done:
 
             b->last = ngx_copy(b->pos, ctx->copy_end, to - from);
 
-            dd("saved new pending data: \"%.*s\"", to - from, b->pos);
+            dd("saved new pending data: \"%.*s\"", (int) (to - from), b->pos);
 
             ctx->pos = ctx->buf->last;
             return NGX_AGAIN;
@@ -1087,7 +1089,7 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_replace_main_conf_t    *rmcf;
 
     int              flags = 0;
-    int              err_offset;
+    sre_int_t        err_offset;
     ngx_str_t        prefix, suffix;
     u_char          *p;
     ngx_str_t       *value;
@@ -1196,7 +1198,7 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     rlcf->program = prog;
-    rlcf->ovecsize = 2 * (rlcf->ncaps + 1) * sizeof(int);
+    rlcf->ovecsize = 2 * (rlcf->ncaps + 1) * sizeof(sre_int_t);
 
     /* TODO register a pool cleanup handler to destroy ppool */
 
