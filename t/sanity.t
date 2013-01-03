@@ -1476,3 +1476,23 @@ abc
 [error]
 --- SKIP
 
+
+
+=== TEST 58: github issue #3: data lost in particular situation
+--- config
+    default_type text/html;
+    location /t {
+        default_type text/html;
+        echo "ABCabcABC";
+        echo "ABCabcABC";
+        #echo "ABCabcABC\nABCabcABC";
+        replace_filter "(a.+?c){2}" "X" "ig";
+    }
+--- request
+GET /t
+--- response_body
+XXABC
+--- no_error_log
+[alert]
+[error]
+
