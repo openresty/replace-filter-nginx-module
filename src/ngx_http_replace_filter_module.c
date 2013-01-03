@@ -1087,6 +1087,8 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_replace_main_conf_t    *rmcf;
 
     int              flags = 0;
+    int              err_offset;
+    ngx_str_t        prefix, suffix;
     u_char          *p;
     ngx_str_t       *value;
     ngx_uint_t       i;
@@ -1137,10 +1139,25 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     dd("regex: %s", value[1].data);
 
-    re = sre_regex_parse(ppool, value[1].data, &rlcf->ncaps, flags);
+    re = sre_regex_parse(ppool, value[1].data, &rlcf->ncaps, flags,
+                         &err_offset);
     if (re == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "failed to parse regex \"%V\"", &rlcf->match);
+        if (err_offset >= 0 && (size_t) err_offset <= rlcf->match.len) {
+            prefix.data = rlcf->match.data;
+            prefix.len = err_offset;
+
+            suffix.data = rlcf->match.data + err_offset;
+            suffix.len = rlcf->match.len - err_offset;
+
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                               "failed to parse regex: syntax error; "
+                               "marked by <-- HERE in \"%V <-- HERE %V\"",
+                               &prefix, &suffix);
+
+        } else {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                               "failed to parse regex \"%V\"", &rlcf->match);
+        }
 
         sre_destroy_pool(ppool);
         return NGX_CONF_ERROR;

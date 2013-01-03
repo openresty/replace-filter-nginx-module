@@ -1458,3 +1458,21 @@ abc
 [alert]
 [error]
 
+
+
+=== TEST 57: bad regex
+--- config
+    default_type text/html;
+    location /t {
+        echo abc;
+        replace_filter '(a+b' '';
+    }
+--- request
+GET /t
+--- response_body
+abc
+--- no_error_log
+[alert]
+[error]
+--- SKIP
+
