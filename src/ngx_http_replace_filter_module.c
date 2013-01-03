@@ -1152,9 +1152,10 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
             suffix.len = rlcf->match.len - err_offset;
 
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                               "failed to parse regex: syntax error; "
-                               "marked by <-- HERE in \"%V <-- HERE %V\"",
-                               &prefix, &suffix);
+                               "failed to parse regex at offset %i: "
+                               "syntax error; marked by <-- HERE in "
+                               "\"%V <-- HERE %V\"",
+                               (ngx_int_t) err_offset, &prefix, &suffix);
 
         } else {
             ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
