@@ -616,6 +616,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
     unsigned               new_rematch;
     size_t                 len;
     ngx_buf_t             *b;
+    sre_int_t             *pending_matched;
     ngx_chain_t           *cl, *newcl, *pending, **ll, **last_pending;
 
     if (ctx->once || ctx->vm_done) {
@@ -636,7 +637,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
        ctx->special_buf, ctx->last_buf,
        (int) (ctx->buf->last - ctx->pos), ctx->pos);
 
-    rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf);
+    rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf,
+                          &pending_matched);
 
     dd("vm pike exec: %d", (int) rc);
 
