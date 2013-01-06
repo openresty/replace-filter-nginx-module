@@ -1,8 +1,11 @@
 #ifndef DDEBUG_H
 #define DDEBUG_H
 
+
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <assert.h>
+
 
 #if defined(DDEBUG) && (DDEBUG)
 

@@ -10,6 +10,8 @@ use Test::Nginx::Socket;
 
 repeat_each(2);
 
+#no_shuffle();
+
 plan tests => repeat_each() * (blocks() * 4);
 
 our $StapOutputChains = <<'_EOC_';
@@ -1492,6 +1494,146 @@ abc
 GET /t
 --- response_body
 XXABC
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 59: variation
+--- config
+    default_type text/html;
+    location /t {
+        default_type text/html;
+        #echo "ABCabcABC";
+        #echo "ABCabcABC";
+        echo "ACacAC ACacAC";
+        replace_filter "(a.+?c){2}" "X" "ig";
+    }
+--- request
+GET /t
+--- response_body
+XacAC
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 60: nested pending matched
+--- config
+    default_type text/html;
+    location /t {
+        default_type text/html;
+        echo -n a;
+        echo -n b;
+        echo -n c;
+        echo -n def;
+        echo -n gh;
+        echo -n i;
+        echo k;
+        #echo abcdefig;
+        replace_filter "abcdefghij|bcdefg|cd" "X" "ig";
+    }
+--- request
+GET /t
+--- response_body
+aXhik
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 61: test split chain with b_sane=1, next=NULL
+--- config
+    default_type text/html;
+
+    location = /t {
+        echo -n aba;
+        echo -n ba;
+        echo -n bac;
+        echo d;
+        #echo abababacd;
+        replace_filter abacd X;
+    }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- stap3
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1217") {
+    print_ubacktrace()
+}
+--- response_body
+ababX
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 62: test split chain with b_sane=1, next not NULL
+--- config
+    default_type text/html;
+
+    location = /t {
+        echo -n aba;
+        echo -n ba;
+        echo -n ba;
+        echo -n bac;
+        echo d;
+        #echo abababacd;
+        replace_filter ababacd X;
+    }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- stap3
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1217") {
+    print_ubacktrace()
+}
+--- response_body
+ababX
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 63: trim leading spaces (1 byte at a time)
+--- config
+    default_type text/html;
+    location /a.html {
+    }
+
+    location = /t {
+        content_by_lua '
+            local res = ngx.location.capture("/a.html")
+            local txt = res.body
+            for i = 1, string.len(txt) do
+                ngx.print(string.sub(txt, i, i))
+                ngx.flush(true)
+            end
+        ';
+        replace_filter '^\s+' '' g;
+    }
+
+--- user_files
+>>> a.html
+  hello, world  
+blah yeah
+hello  
+   baby!
+     
+abc
+--- request
+GET /t
+--- response_body
+hello, world  
+blah yeah
+hello  
+baby!
+abc
 --- no_error_log
 [alert]
 [error]
