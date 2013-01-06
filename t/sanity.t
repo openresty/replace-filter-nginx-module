@@ -35,6 +35,12 @@ F(ngx_http_chunked_body_filter) {
     }
 }
 
+F(ngx_http_replace_output) {
+    if (active && pid() == target()) {
+        printf("http replace output: %s\n", ngx_chain_dump($ctx->out))
+    }
+}
+
 probe syscall.writev {
     if (active && pid() == target()) {
         printf("writev(%s)", ngx_iovec_dump($vec, $vlen))
@@ -519,7 +525,12 @@ GET /t
     }
 --- request
 GET /t
---- stap2 eval: $::StapOutputChains
+--- stap3 eval: $::StapOutputChains
+--- stap2
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:539") {
+    printf("chain: %s", ngx_chain_dump($ctx->busy))
+    //print_ubacktrace()
+}
 --- response_body
 X
 --- no_error_log

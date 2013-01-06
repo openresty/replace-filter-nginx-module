@@ -354,15 +354,10 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 }
 
                 b = cl->buf;
-                ngx_memcpy(b, ctx->buf, sizeof(ngx_buf_t));
 
+                b->memory = 1;
                 b->pos = ctx->copy_start;
                 b->last = ctx->copy_end;
-
-                if (b->in_file) {
-                    b->file_last = b->file_pos + (b->last - ctx->buf->pos);
-                    b->file_pos += b->pos - ctx->buf->pos;
-                }
 
                 *ctx->last_out = cl;
                 ctx->last_out = &cl->next;
@@ -491,7 +486,7 @@ rematch:
         ngx_http_replace_dump_chain("ctx->pending2", &ctx->pending2,
                                     ctx->last_pending2);
 #endif
-    }
+    } /* while */
 
     if (ctx->out == NULL && ctx->busy == NULL) {
         return NGX_OK;
@@ -547,8 +542,15 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
             break;
         }
 
+        if (cl->buf->tag != (ngx_buf_tag_t) &ngx_http_replace_filter_module) {
+            ctx->busy = cl->next;
+            ngx_free_chain(r->pool, cl);
+            continue;
+        }
+
         if (b->shadow) {
             b->shadow->pos = b->shadow->last;
+            b->shadow->file_pos = b->shadow->file_last;
         }
 
         ctx->busy = cl->next;
@@ -570,6 +572,14 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
             ctx->free = ctx->special;
             ctx->special = NULL;
             ctx->last_special = &ctx->special;
+
+            /* free the temporary buf's data block if it is big enough */
+            if (b->temporary
+                && b->start != NULL
+                && b->end - b->start > (ssize_t) r->pool->max)
+            {
+                ngx_pfree(r->pool, b->start);
+            }
 
             /* add the data buf itself to the free buf chain */
 
@@ -1314,11 +1324,13 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
     b->file_pos = from;
     b->file_last = to;
 
-    b->pos = ngx_palloc(r->pool, len);
-    if (b->pos == NULL) {
+    b->start = ngx_palloc(r->pool, len);
+    if (b->start == NULL) {
         return NULL;
     }
+    b->end = b->start + len;
 
+    b->pos = b->start;
     b->last = ngx_copy(b->pos, ctx->buf->pos + from - ctx->stream_pos, len);
 
     dd("buffered pending data: stream_pos=%ld (%ld, %ld): %.*s",
