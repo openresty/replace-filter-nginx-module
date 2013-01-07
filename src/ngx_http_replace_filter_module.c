@@ -677,7 +677,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
             if (ngx_http_replace_split_chain(r, ctx, &ctx->pending,
                                              &ctx->last_pending, from,
-                                             &ctx->free, NULL, 0)
+                                             &cl, &last, 0)
                 != NGX_OK)
             {
                 return NGX_ERROR;
@@ -689,6 +689,11 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
                 ctx->pending = NULL;
                 ctx->last_pending = &ctx->pending;
+            }
+
+            if (cl) {
+                *last = ctx->free;
+                ctx->free = cl;
             }
         }
 
