@@ -32,13 +32,12 @@ typedef struct {
     ngx_str_t                  match;
     ngx_str_t                  value;
 
-    ngx_hash_t                 types;
-
     ngx_flag_t                 once;
     sre_uint_t                 ncaps;
     size_t                     ovecsize;
     sre_program_t             *program;
 
+    ngx_hash_t                 types;
     ngx_array_t               *types_keys;
 } ngx_http_replace_loc_conf_t;
 
@@ -86,8 +85,8 @@ static ngx_int_t ngx_http_replace_parse(ngx_http_request_t *r,
 
 static char * ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
-static void *ngx_http_replace_create_conf(ngx_conf_t *cf);
-static char *ngx_http_replace_merge_conf(ngx_conf_t *cf,
+static void *ngx_http_replace_create_loc_conf(ngx_conf_t *cf);
+static char *ngx_http_replace_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
 static ngx_int_t ngx_http_replace_filter_init(ngx_conf_t *cf);
 void ngx_http_replace_cleanup_pool(void *data);
@@ -136,8 +135,8 @@ static ngx_http_module_t  ngx_http_replace_filter_module_ctx = {
     NULL,                                  /* create server configuration */
     NULL,                                  /* merge server configuration */
 
-    ngx_http_replace_create_conf,          /* create location configuration */
-    ngx_http_replace_merge_conf            /* merge location configuration */
+    ngx_http_replace_create_loc_conf,      /* create location configuration */
+    ngx_http_replace_merge_loc_conf        /* merge location configuration */
 };
 
 
@@ -1109,7 +1108,7 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 
 static void *
-ngx_http_replace_create_conf(ngx_conf_t *cf)
+ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
 {
     ngx_http_replace_loc_conf_t  *rlcf;
 
@@ -1137,7 +1136,7 @@ ngx_http_replace_create_conf(ngx_conf_t *cf)
 
 
 static char *
-ngx_http_replace_merge_conf(ngx_conf_t *cf, void *parent, void *child)
+ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 {
     ngx_http_replace_loc_conf_t *prev = parent;
     ngx_http_replace_loc_conf_t *conf = child;
