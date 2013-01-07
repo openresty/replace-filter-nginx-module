@@ -71,6 +71,8 @@ typedef struct {
     ngx_chain_t              **last_special;
     ngx_chain_t               *rematch;
 
+    size_t                     total_buffered;
+
     unsigned                   once:1;
     unsigned                   vm_done:1;
     unsigned                   special_buf:1;
@@ -103,6 +105,8 @@ static ngx_int_t ngx_http_replace_split_chain(ngx_http_request_t *r,
 static void ngx_http_replace_dump_chain(const char *prefix, ngx_chain_t **pcl,
     ngx_chain_t **last);
 #endif
+static void ngx_http_replace_check_total_buffered(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, sre_int_t len, sre_int_t mlen);
 
 
 static ngx_command_t  ngx_http_replace_filter_commands[] = {
@@ -638,6 +642,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
     switch (rc) {
     case SRE_OK:
+        ctx->total_buffered = 0;
+
         from = ctx->ovector[0];
         to = ctx->ovector[1];
 
@@ -763,8 +769,17 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             return NGX_ERROR;
         }
 
+        if (pending_matched) {
+            mfrom = pending_matched[0];
+            mto = pending_matched[1];
+
+            dd("pending matched: (%ld, %ld)", (long) mfrom, (long) mto);
+        }
+
         if (from == to) {
             if (ctx->pending) {
+                ctx->total_buffered = 0;
+
                 dd("output pending");
                 *ctx->last_out = ctx->pending;
                 ctx->last_out = ctx->last_pending;
@@ -776,14 +791,10 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             ctx->copy_start = ctx->pos;
             ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
             ctx->pos = ctx->copy_end;
+
+            ngx_http_replace_check_total_buffered(r, ctx, to - from,
+                                                  mto - mfrom);
             return NGX_AGAIN;
-        }
-
-        if (pending_matched) {
-            mfrom = pending_matched[0];
-            mto = pending_matched[1];
-
-            dd("pending matched: (%ld, %ld)", (long) mfrom, (long) mto);
         }
 
         /*
@@ -798,6 +809,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
 
             if (ctx->pending) {
+                ctx->total_buffered = 0;
+
                 *ctx->last_out = ctx->pending;
                 ctx->last_out = ctx->last_pending;
 
@@ -850,12 +863,18 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             }
 
             ctx->pos = ctx->buf->last;
+
+            ngx_http_replace_check_total_buffered(r, ctx, to - from,
+                                                  mto - mfrom);
+
             return NGX_AGAIN;
         }
 
         dd("from < ctx->stream_pos");
 
         if (ctx->pending) {
+            /* split ctx->pending into ctx->out and ctx->pending */
+
             if (ngx_http_replace_split_chain(r, ctx, &ctx->pending,
                                              &ctx->last_pending, from, &cl,
                                              &last, 1)
@@ -865,6 +884,12 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             }
 
             if (ctx->pending) {
+                dd("adjust pending: pos=%d, from=%d",
+                   (int) ctx->pending->buf->file_pos, (int) from);
+
+                ctx->total_buffered -= (size_t)
+                    (from - ctx->pending->buf->file_pos);
+
                 *ctx->last_out = ctx->pending;
                 ctx->last_out = ctx->last_pending;
 
@@ -873,6 +898,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             }
 
             if (cl) {
+                dd("splitted ctx->pending into ctx->out and ctx->pending: %d",
+                   (int) ctx->total_buffered);
                 ctx->pending = cl;
                 ctx->last_pending = last;
             }
@@ -889,6 +916,8 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 }
 
                 if (cl) {
+                    ctx->total_buffered -= (size_t) (ctx->stream_pos - mfrom);
+
                     dd("splitted ctx->pending into ctx->pending and ctx->free");
                     *last = ctx->free;
                     ctx->free = cl;
@@ -899,6 +928,7 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
         if (ctx->pending2) {
 
             if (pending_matched) {
+                dd("splitting ctx->pending2 into ctx->free and ctx->pending2");
 
                 if (ngx_http_replace_split_chain(r, ctx, &ctx->pending2,
                                                  &ctx->last_pending2,
@@ -909,6 +939,14 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 }
 
                 if (ctx->pending2) {
+
+                    dd("total buffered reduced by %d (was %d)",
+                       (int) (mto - ctx->pending2->buf->file_pos),
+                       (int) ctx->total_buffered);
+
+                    ctx->total_buffered -= (size_t)
+                        (mto - ctx->pending2->buf->file_pos);
+
                     *ctx->last_pending2 = ctx->free;
                     ctx->free = ctx->pending2;
 
@@ -939,6 +977,10 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
             ctx->copy_end = NULL;
 
             ctx->pos = ctx->buf->last;
+
+            ngx_http_replace_check_total_buffered(r, ctx, to - from,
+                                                  mto - mfrom);
+
             return NGX_AGAIN;
         }
 
@@ -977,9 +1019,15 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
         ctx->copy_end = NULL;
 
         ctx->pos = ctx->buf->last;
+
+        ngx_http_replace_check_total_buffered(r, ctx, to - from,
+                                              mto - mfrom);
+
         return NGX_AGAIN;
 
     case SRE_DECLINED:
+        ctx->total_buffered = 0;
+
         return NGX_DECLINED;
 
     default:
@@ -1363,6 +1411,8 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
        (long) ctx->stream_pos, (long) from, (long) to,
        (int) len, ctx->buf->pos + from - ctx->stream_pos);
 
+    ctx->total_buffered += len;
+
     return cl;
 }
 
@@ -1395,3 +1445,22 @@ ngx_http_replace_dump_chain(const char *prefix, ngx_chain_t **pcl,
     }
 }
 #endif
+
+
+static void
+ngx_http_replace_check_total_buffered(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, sre_int_t len, sre_int_t mlen)
+{
+    dd("total buffered: %d", (int) ctx->total_buffered);
+
+    if ((ssize_t) ctx->total_buffered != len - mlen) {
+        ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
+                      "replace filter: ctx->total_buffered out of "
+                      "sync: it is %i but should be %uz",
+                      ctx->total_buffered, (ngx_int_t) (len - mlen));
+
+#if (DDEBUG)
+        assert(0);
+#endif
+    }
+}

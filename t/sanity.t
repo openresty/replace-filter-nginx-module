@@ -1649,3 +1649,32 @@ abc
 [alert]
 [error]
 
+
+
+=== TEST 64: split ctx->pending into ctx->pending and ctx->free
+--- config
+    default_type text/html;
+
+    location = /t {
+        #echo "abc\nd";
+        echo -n a;
+        echo -n b;
+        echo -n c;
+        echo -n "\n";
+        echo d;
+        replace_filter "abcd|bc\ne|c$" X;
+    }
+--- request
+GET /t
+--- stap2 eval: $::StapOutputChains
+--- stap3
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1217") {
+    print_ubacktrace()
+}
+--- response_body
+abX
+d
+--- no_error_log
+[alert]
+[error]
+
