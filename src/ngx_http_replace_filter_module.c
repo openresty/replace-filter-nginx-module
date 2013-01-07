@@ -574,6 +574,7 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
             ctx->special = NULL;
             ctx->last_special = &ctx->special;
 
+#if 0
             /* free the temporary buf's data block if it is big enough */
             if (b->temporary
                 && b->start != NULL
@@ -581,6 +582,7 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
             {
                 ngx_pfree(r->pool, b->start);
             }
+#endif
 
             /* add the data buf itself to the free buf chain */
 
