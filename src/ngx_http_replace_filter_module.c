@@ -18,7 +18,9 @@
 #include <sregex/sregex.h>
 
 
-#define SREGEX_COMPILER_POOL_SIZE  4096
+enum {
+    SREGEX_COMPILER_POOL_SIZE = 4096
+};
 
 
 typedef struct {
