@@ -868,6 +868,24 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 ctx->pending = cl;
                 ctx->last_pending = last;
             }
+
+            if (pending_matched && !ctx->pending2 && mto >= ctx->stream_pos) {
+                dd("splitting ctx->pending into ctx->pending and ctx->free");
+
+                if (ngx_http_replace_split_chain(r, ctx, &ctx->pending,
+                                                 &ctx->last_pending, mfrom, &cl,
+                                                 &last, 0)
+                    != NGX_OK)
+                {
+                    return NGX_ERROR;
+                }
+
+                if (cl) {
+                    dd("splitted ctx->pending into ctx->pending and ctx->free");
+                    *last = ctx->free;
+                    ctx->free = cl;
+                }
+            }
         }
 
         if (ctx->pending2) {
