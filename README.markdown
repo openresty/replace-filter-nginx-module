@@ -112,6 +112,21 @@ Specify one or more MIME types (in the `Content-Type` response header) to be pro
 
 By default, only `text/html` typed responses are processed.
 
+replace_filter_max_buffered_size
+---------------------------------
+**syntax:** *replace_filter_max_buffered_size &lt;size&gt;*
+
+**default:** *replace_filter_max_buffered_size 8k*
+
+**context:** *http, server, location*
+
+**phase:** *output body filter*
+
+Limits the total size of the data buffered by the module at runtime. Default to `8k`.
+
+When the limit is reached, `replace_filter` will immediately stop processing and
+leave all the remaining response body data intact.
+
 Installation
 ============
 
