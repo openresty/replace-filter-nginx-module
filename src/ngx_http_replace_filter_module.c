@@ -39,6 +39,8 @@ typedef struct {
 
     ngx_hash_t                 types;
     ngx_array_t               *types_keys;
+
+    size_t                     max_buffered_size;
 } ngx_http_replace_loc_conf_t;
 
 
@@ -95,9 +97,10 @@ void ngx_http_replace_cleanup_pool(void *data);
 static ngx_chain_t * ngx_http_replace_get_free_buf(ngx_pool_t *p,
     ngx_chain_t **free);
 static void * ngx_http_replace_create_main_conf(ngx_conf_t *cf);
-static ngx_chain_t *
+static ngx_int_t
     ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
-    ngx_http_replace_ctx_t *ctx, sre_int_t from, sre_int_t to);
+    ngx_http_replace_ctx_t *ctx, sre_int_t from, sre_int_t to,
+    ngx_chain_t **out);
 static ngx_int_t ngx_http_replace_split_chain(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx, ngx_chain_t **pa, ngx_chain_t ***plast_a,
     sre_int_t split, ngx_chain_t **pb, ngx_chain_t ***plast_b, unsigned b_sane);
@@ -124,6 +127,13 @@ static ngx_command_t  ngx_http_replace_filter_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_replace_loc_conf_t, types_keys),
       &ngx_http_html_default_types[0] },
+
+    { ngx_string("replace_filter_max_buffered_size"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_size_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_replace_loc_conf_t, max_buffered_size),
+      NULL },
 
       ngx_null_command
 };
@@ -409,7 +419,9 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             *ctx->last_out = cl;
             ctx->last_out = &cl->next;
 
-            ctx->once = rlcf->once;
+            if (!ctx->once) {
+                ctx->once = rlcf->once;
+            }
 
             if (rc == NGX_BUSY) {
                 dd("goto rematch");
@@ -610,7 +622,8 @@ static ngx_int_t
 ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
     ngx_chain_t *rematch)
 {
-    sre_int_t              rc, from, to, mfrom = -1, mto = -1;
+    sre_int_t              ret, from, to, mfrom = -1, mto = -1;
+    ngx_int_t              rc;
     ngx_chain_t           *new_rematch = NULL;
     ngx_chain_t           *cl;
     ngx_chain_t          **last_rematch, **last;
@@ -635,12 +648,12 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
        ctx->special_buf, ctx->last_buf,
        (int) (ctx->buf->last - ctx->pos), ctx->pos);
 
-    rc = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf,
-                          &pending_matched);
+    ret = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf,
+                           &pending_matched);
 
-    dd("vm pike exec: %d", (int) rc);
+    dd("vm pike exec: %d", (int) ret);
 
-    switch (rc) {
+    switch (ret) {
     case SRE_OK:
         ctx->total_buffered = 0;
 
@@ -831,9 +844,20 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 if (from < mfrom) {
                     /* create ctx->pending as (from, mfrom) */
 
-                    cl = ngx_http_replace_new_pending_buf(r, ctx, from, mfrom);
-                    if (cl == NULL) {
+                    rc = ngx_http_replace_new_pending_buf(r, ctx, from, mfrom,
+                                                          &cl);
+                    if (rc == NGX_ERROR) {
                         return NGX_ERROR;
+                    }
+
+                    if (rc == NGX_BUSY) {
+                        dd("stop processing because of buffer size limit "
+                           "reached");
+                        ctx->once = 1;
+                        ctx->copy_start = ctx->pos;
+                        ctx->copy_end = ctx->buf->last;
+                        ctx->pos = ctx->buf->last;
+                        return NGX_AGAIN;
                     }
 
                     *ctx->last_pending = cl;
@@ -842,10 +866,22 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
                 if (mto < to) {
                     /* create ctx->pending2 as (mto, to) */
-                    cl = ngx_http_replace_new_pending_buf(r, ctx, mto, to);
-                    if (cl == NULL) {
+                    rc = ngx_http_replace_new_pending_buf(r, ctx, mto, to, &cl);
+                    if (rc == NGX_ERROR) {
                         return NGX_ERROR;
                     }
+
+#if 1
+                    if (rc == NGX_BUSY) {
+                        dd("stop processing because of buffer size limit "
+                           "reached");
+                        ctx->once = 1;
+                        ctx->copy_start = ctx->pos;
+                        ctx->copy_end = ctx->buf->last;
+                        ctx->pos = ctx->buf->last;
+                        return NGX_AGAIN;
+                    }
+#endif
 
                     *ctx->last_pending2 = cl;
                     ctx->last_pending2 = &cl->next;
@@ -853,10 +889,21 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
             } else {
                 dd("create ctx->pending as (%ld, %ld)", (long) from, (long) to);
-                cl = ngx_http_replace_new_pending_buf(r, ctx, from, to);
-                if (cl == NULL) {
+                rc = ngx_http_replace_new_pending_buf(r, ctx, from, to, &cl);
+                if (rc == NGX_ERROR) {
                     return NGX_ERROR;
                 }
+
+#if 1
+                if (rc == NGX_BUSY) {
+                    dd("stop processing because of buffer size limit reached");
+                    ctx->once = 1;
+                    ctx->copy_start = ctx->pos;
+                    ctx->copy_end = ctx->buf->last;
+                    ctx->pos = ctx->buf->last;
+                    return NGX_AGAIN;
+                }
+#endif
 
                 *ctx->last_pending = cl;
                 ctx->last_pending = &cl->next;
@@ -964,10 +1011,46 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
                 dd("new pending data to buffer to ctx->pending2: (%ld, %ld)",
                    (long) mto, (long) to);
 
-                cl = ngx_http_replace_new_pending_buf(r, ctx, mto, to);
-                if (cl == NULL) {
+                rc = ngx_http_replace_new_pending_buf(r, ctx, mto, to, &cl);
+                if (rc == NGX_ERROR) {
                     return NGX_ERROR;
                 }
+
+#if 1
+                if (rc == NGX_BUSY) {
+                    ctx->once = 1;
+
+                    if (ctx->pending) {
+                        *ctx->last_out = ctx->pending;
+                        ctx->last_out = ctx->last_pending;
+
+                        ctx->pending = NULL;
+                        ctx->last_pending = &ctx->pending;
+                    }
+
+                    ctx->copy_start = NULL;
+                    ctx->copy_end = NULL;
+
+                    if (ctx->pending2) {
+                        new_rematch = ctx->pending2;
+                        last_rematch = ctx->last_pending2;
+
+                        if (rematch) {
+                            ctx->rematch = rematch;
+                        }
+
+                        /* prepend cl to ctx->rematch */
+                        *last_rematch = ctx->rematch;
+                        ctx->rematch = new_rematch;
+
+                        ctx->pending2 = NULL;
+                        ctx->last_pending2 = &ctx->pending2;
+                    }
+
+                    ctx->pos = ctx->buf->pos + (mto - ctx->stream_pos);
+                    return new_rematch ? NGX_BUSY : NGX_OK;
+                }
+#endif
 
                 *ctx->last_pending2 = cl;
                 ctx->last_pending2 = &cl->next;
@@ -990,9 +1073,27 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 
             if (mto < to) {
                 /* new pending data to buffer to ctx->pending2 */
-                cl = ngx_http_replace_new_pending_buf(r, ctx, mto, to);
-                if (cl == NULL) {
+                rc = ngx_http_replace_new_pending_buf(r, ctx, mto, to, &cl);
+                if (rc == NGX_ERROR) {
                     return NGX_ERROR;
+                }
+
+                if (rc == NGX_BUSY) {
+                    ctx->once = 1;
+
+                    if (ctx->pending) {
+                        *ctx->last_out = ctx->pending;
+                        ctx->last_out = ctx->last_pending;
+
+                        ctx->pending = NULL;
+                        ctx->last_pending = &ctx->pending;
+                    }
+
+                    ctx->copy_start = NULL;
+                    ctx->copy_end = NULL;
+                    ctx->pos = ctx->buf->pos + mto - ctx->stream_pos;
+
+                    return NGX_OK;
                 }
 
                 *ctx->last_pending2 = cl;
@@ -1004,12 +1105,32 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
         } else {
 
             /* new pending data to buffer to ctx->pending */
-            cl = ngx_http_replace_new_pending_buf(r, ctx, ctx->pos
+            rc = ngx_http_replace_new_pending_buf(r, ctx, ctx->pos
                                                   - ctx->buf->pos
-                                                  + ctx->stream_pos, to);
-            if (cl == NULL) {
+                                                  + ctx->stream_pos, to, &cl);
+            if (rc == NGX_ERROR) {
                 return NGX_ERROR;
             }
+
+#if 1
+            if (rc == NGX_BUSY) {
+                ctx->once = 1;
+
+                if (ctx->pending) {
+                    *ctx->last_out = ctx->pending;
+                    ctx->last_out = ctx->last_pending;
+
+                    ctx->pending = NULL;
+                    ctx->last_pending = &ctx->pending;
+                }
+
+                ctx->copy_start = ctx->pos;
+                ctx->copy_end = ctx->buf->last;
+                ctx->pos = ctx->buf->last;
+
+                return NGX_AGAIN;
+            }
+#endif
 
             *ctx->last_pending = cl;
             ctx->last_pending = &cl->next;
@@ -1165,10 +1286,10 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 static void *
 ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
 {
-    ngx_http_replace_loc_conf_t  *rlcf;
+    ngx_http_replace_loc_conf_t  *conf;
 
-    rlcf = ngx_pcalloc(cf->pool, sizeof(ngx_http_replace_loc_conf_t));
-    if (rlcf == NULL) {
+    conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_replace_loc_conf_t));
+    if (conf == NULL) {
         return NULL;
     }
 
@@ -1184,9 +1305,10 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
      *     conf->ovecsize = 0;
      */
 
-    rlcf->once = NGX_CONF_UNSET;
+    conf->once = NGX_CONF_UNSET;
+    conf->max_buffered_size = NGX_CONF_UNSET_SIZE;
 
-    return rlcf;
+    return conf;
 }
 
 
@@ -1199,6 +1321,9 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->once, prev->once, 1);
     ngx_conf_merge_str_value(conf->match, prev->match, "");
     ngx_conf_merge_str_value(conf->value, prev->value, "");
+    ngx_conf_merge_size_value(conf->max_buffered_size,
+                              prev->max_buffered_size,
+                              (size_t) 2 * ngx_pagesize);
 
     if (conf->program == NULL) {
         conf->program = prev->program;
@@ -1369,13 +1494,15 @@ ngx_http_replace_split_chain(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
 }
 
 
-static ngx_chain_t *
+static ngx_int_t
 ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
-    ngx_http_replace_ctx_t *ctx, sre_int_t from, sre_int_t to)
+    ngx_http_replace_ctx_t *ctx, sre_int_t from, sre_int_t to,
+    ngx_chain_t **out)
 {
     size_t               len;
     ngx_buf_t           *b;
     ngx_chain_t         *cl;
+    ngx_http_replace_loc_conf_t  *rlcf;
 
     if (from < ctx->stream_pos) {
         from = ctx->stream_pos;
@@ -1383,12 +1510,24 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
 
     len = (size_t) (to - from);
     if (len == 0) {
-        return NULL;
+        return NGX_ERROR;
+    }
+
+    ctx->total_buffered += len;
+
+    rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
+
+    if (ctx->total_buffered > rlcf->max_buffered_size) {
+        ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
+                      "replace filter: exceeding "
+                      "replace_filter_max_buffered_size (%uz): %uz",
+                      rlcf->max_buffered_size, ctx->total_buffered);
+        return NGX_BUSY;
     }
 
     cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
     if (cl == NULL) {
-        return NULL;
+        return NGX_ERROR;
     }
 
     b = cl->buf;
@@ -1400,7 +1539,7 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
 
     b->start = ngx_palloc(r->pool, len);
     if (b->start == NULL) {
-        return NULL;
+        return NGX_ERROR;
     }
     b->end = b->start + len;
 
@@ -1411,9 +1550,8 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
        (long) ctx->stream_pos, (long) from, (long) to,
        (int) len, ctx->buf->pos + from - ctx->stream_pos);
 
-    ctx->total_buffered += len;
-
-    return cl;
+    *out = cl;
+    return NGX_OK;
 }
 
 

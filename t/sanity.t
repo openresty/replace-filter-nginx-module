@@ -69,6 +69,7 @@ __DATA__
 === TEST 1: ambiguous pattern
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abcabcabde;
         replace_filter abcabd X;
@@ -86,6 +87,7 @@ abcXe
 === TEST 2: ambiguous pattern
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo -n ababac;
         replace_filter abac X;
@@ -103,6 +105,7 @@ abX
 === TEST 3: alt
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abc;
         replace_filter 'ab|abc' X;
@@ -120,6 +123,7 @@ Xc
 === TEST 4: caseless
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abcabcaBde;
         replace_filter abCabd X i;
@@ -137,6 +141,7 @@ abcXe
 === TEST 5: case sensitive (no match)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abcabcaBde;
         replace_filter abCabd X;
@@ -154,6 +159,7 @@ abcabcaBde
 === TEST 6: 1-byte chain bufs
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 3;
 
     location = /t {
         echo -n a;
@@ -168,6 +174,12 @@ abcabcaBde
 --- request
 GET /t
 --- stap2 eval: $::StapOutputChains
+--- stap3
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1413") {
+    //printf("chain: %s", ngx_chain_dump($ctx->busy))
+    print_ubacktrace()
+}
+
 --- response_body
 abXd
 --- no_error_log
@@ -179,6 +191,7 @@ abXd
 === TEST 7: 2-byte chain bufs
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 2;
 
     location = /t {
         echo -n ab;
@@ -201,6 +214,7 @@ abXd
 === TEST 8: 3-byte chain bufs
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 3;
 
     location = /t {
         echo -n aba;
@@ -222,6 +236,7 @@ abXd
 === TEST 9: 3-byte chain bufs (more)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 4;
 
     location = /t {
         echo -n aba;
@@ -242,6 +257,7 @@ abX
 
 === TEST 10: once by default (1st char matched)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location /t {
         echo abcabcabde;
@@ -260,6 +276,7 @@ Xbcabcabde
 === TEST 11: once by default (2nd char matched)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abcabcabde;
         replace_filter b X;
@@ -277,6 +294,7 @@ aXcabcabde
 === TEST 12: global substitution
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo bbc;
         replace_filter b X g;
@@ -294,6 +312,7 @@ XXc
 === TEST 13: global substitution
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo abcabcabde;
         replace_filter b X g;
@@ -311,6 +330,7 @@ aXcaXcaXde
 === TEST 14: global substitution (empty captures)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo -n abcabcabde;
         replace_filter [0-9]* X g;
@@ -328,6 +348,7 @@ XaXbXcXaXbXcXaXbXdXeX
 === TEST 15: global substitution (empty captures, splitted)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo -n ab;
         echo -n cab;
@@ -348,6 +369,7 @@ XaXbXcXaXbXcXaXbXdXeX
 === TEST 16: global substitution (\d+)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo "hello1234, 56 world";
         replace_filter \d+ X g;
@@ -417,6 +439,7 @@ aXc
 
 === TEST 20: trim leading spaces
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location /a.html {
         replace_filter '^\s+' '' g;
@@ -446,6 +469,7 @@ abc
 === TEST 21: trim trailing spaces
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /a.html {
         replace_filter '\s+$' '' g;
     }
@@ -473,6 +497,7 @@ abc
 
 === TEST 22: trim both leading and trailing spaces
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location /a.html {
         replace_filter '^\s+|\s+$' '' g;
@@ -501,6 +526,7 @@ abc
 
 === TEST 23: pure flush buf in the stream (no data)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location = /t {
         echo_flush;
@@ -517,6 +543,7 @@ GET /t
 
 === TEST 24: pure flush buf in the stream (with data)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location = /t {
         echo a;
@@ -542,6 +569,7 @@ X
 === TEST 25: trim both leading and trailing spaces (1 byte at a time)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 1;
     location = /t {
         echo -n 'a';
         echo ' ';
@@ -571,6 +599,7 @@ b
 
 === TEST 26: trim both leading and trailing spaces (1 byte at a time), no \s for $
 --- config
+    replace_filter_max_buffered_size 1;
     default_type text/html;
     location = /t {
         echo -n 'a';
@@ -601,6 +630,7 @@ b
 
 === TEST 27: trim both leading and trailing spaces (1 byte at a time)
 --- config
+    replace_filter_max_buffered_size 4;
     default_type text/html;
     location /a.html {
         internal;
@@ -633,6 +663,13 @@ F(ngx_palloc) {
         exit()
     }
 }
+--- stap3
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1438") {
+    //printf("chain: %s", ngx_chain_dump($ctx->busy))
+    print_ubacktrace()
+    exit()
+}
+
 --- request
 GET /t
 --- response_body chop
@@ -650,6 +687,7 @@ abc
 === TEST 28: \b at the border
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo -n a;
         echo b;
@@ -667,6 +705,7 @@ Xb
 
 === TEST 29: \B at the border
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location /t {
         echo -n a;
@@ -686,6 +725,7 @@ X,
 === TEST 30: \A at the border
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         echo -n a;
         echo 'b';
@@ -704,6 +744,7 @@ Xb
 === TEST 31: memory bufs with last_buf=1
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
     location /t {
         return 200 "abc";
         replace_filter \w+ X;
@@ -722,6 +763,7 @@ X
 === TEST 32: trim both leading and trailing spaces (2 bytes at a time)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 4;
     location /a.html {
         internal;
     }
@@ -771,6 +813,7 @@ abc
 
 === TEST 33: trim both leading and trailing spaces (3 bytes at a time)
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location /a.html {
         internal;
@@ -824,6 +867,7 @@ abc
 
 === TEST 34: github issue #2: error "general look-ahead not supported"
 --- config
+    replace_filter_max_buffered_size 3;
     location /t {
          charset utf-8;
          default_type text/html;
@@ -833,6 +877,12 @@ abc
      }
 --- request
 GET /t
+
+--- stap2
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1492") {
+    print_ubacktrace()
+}
+
 --- response_body
 Xbc
 --- no_error_log
@@ -843,6 +893,7 @@ Xbc
 
 === TEST 35: backtrack to the middle of a pending capture (pending: output|capture + rematch)
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n ab;
@@ -852,12 +903,10 @@ Xbc
     }
 
 --- stap2
-F(ngx_palloc) {
-    if ($size < 0) {
-        print_ubacktrace()
-        exit()
-    }
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1501") {
+    print_ubacktrace()
 }
+
 --- stap3 eval: $::StapOutputChains
 --- request
 GET /t
@@ -872,6 +921,7 @@ aXcd
 
 === TEST 36: backtrack to the middle of a pending capture (pending: output + capture|rematch
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -881,12 +931,10 @@ aXcd
     }
 
 --- stap2
-F(ngx_palloc) {
-    if ($size < 0) {
-        print_ubacktrace()
-        exit()
-    }
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1501") {
+    print_ubacktrace()
 }
+
 --- stap3 eval: $::StapOutputChains
 --- request
 GET /t
@@ -901,6 +949,7 @@ aXcd
 
 === TEST 37: backtrack to the middle of a pending capture (pending: output + capture + rematch
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -911,12 +960,10 @@ aXcd
     }
 
 --- stap2
-F(ngx_palloc) {
-    if ($size < 0) {
-        print_ubacktrace()
-        exit()
-    }
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1522") {
+    print_ubacktrace()
 }
+
 --- stap3 eval: $::StapOutputChains
 --- request
 GET /t
@@ -931,6 +978,7 @@ aXcd
 
 === TEST 38: backtrack to the middle of a pending capture (pending: output|capture|rematch
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n abc;
@@ -959,6 +1007,7 @@ aXcd
 
 === TEST 39: backtrack to the middle of a pending capture (pending: output|capture|rematch(2)
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n abcc;
@@ -987,6 +1036,7 @@ aXccd
 
 === TEST 40: backtrack to the middle of a pending capture (pending: output|capture(2)|rematch
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n abbc;
@@ -1015,6 +1065,7 @@ aXcd
 
 === TEST 41: backtrack to the middle of a pending capture (pending: output(2)|capture|rematch
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n aabc;
@@ -1043,6 +1094,7 @@ aaXcd
 
 === TEST 42: backtrack to the beginning of a pending capture (pending: output + capture|rematch(2)
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -1072,6 +1124,7 @@ aXccd
 
 === TEST 43: backtrack to the beginning of a pending capture (pending: output + capture(2)|rematch
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -1101,6 +1154,7 @@ aXcd
 
 === TEST 44: backtrack to the middle of a pending capture (pending: output(2) + capture|rematch
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n aa;
@@ -1130,6 +1184,7 @@ aaXcd
 
 === TEST 45: assertions across AGAIN
 --- config
+    replace_filter_max_buffered_size 2;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -1159,6 +1214,7 @@ X
 
 === TEST 46: assertions when capture backtracking happens
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -1191,6 +1247,7 @@ aXcdf
 
 === TEST 47: assertions when capture backtracking happens (2 pending matches)
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
     location = /t {
         echo -n a;
@@ -1223,6 +1280,7 @@ aXXdf
 
 === TEST 48: github issue #2: error "general look-ahead not supported", no "g"
 --- config
+    replace_filter_max_buffered_size 3;
     location /t {
          charset utf-8;
          default_type text/html;
@@ -1243,6 +1301,7 @@ Xbc
 
 === TEST 49: nested rematch bufs
 --- config
+    replace_filter_max_buffered_size 4;
     location /t {
          default_type text/html;
          echo -n a;
@@ -1267,6 +1326,7 @@ aXXdeg
 
 === TEST 50: nested rematch bufs (splitting pending buf)
 --- config
+    replace_filter_max_buffered_size 6;
     location /t {
          default_type text/html;
          echo -n a;
@@ -1292,6 +1352,7 @@ aXcXefgi
 
 === TEST 51: remove C/C++ comments (1 byte at a time)
 --- config
+    replace_filter_max_buffered_size 42;
     default_type text/html;
     location /a.html {
         internal;
@@ -1343,6 +1404,7 @@ blah  */ b
 === TEST 52: remove C/C++ comments (all at a time)
 --- config
     default_type text/html;
+    replace_filter_max_buffered_size 0;
 
     location /a.html {
         replace_filter '/\*.*?\*/|//[^\n]*' '' g;
@@ -1382,6 +1444,7 @@ blah  */ b
 
 === TEST 53: remove C/C++ comments (all at a time) - server-level config
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
 
     replace_filter '/\*.*?\*/|//[^\n]*' '' g;
@@ -1420,6 +1483,7 @@ blah  */ b
 
 === TEST 54: multiple replace_filter_types settings (server level)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/plain;
     replace_filter_types text/css text/plain;
     location /t {
@@ -1438,6 +1502,7 @@ aXc
 
 === TEST 55: multiple replace_filter_types settings (server level, but overridding in location)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/plain;
     replace_filter_types text/css text/plain;
     location /t {
@@ -1457,6 +1522,7 @@ abc
 
 === TEST 56: do not use replace_filter at all
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/plain;
     replace_filter_types text/css text/plain;
     location /t {
@@ -1493,6 +1559,7 @@ abc
 
 === TEST 58: github issue #3: data lost in particular situation
 --- config
+    replace_filter_max_buffered_size 4;
     default_type text/html;
     location /t {
         default_type text/html;
@@ -1513,6 +1580,7 @@ XXABC
 
 === TEST 59: variation
 --- config
+    replace_filter_max_buffered_size 5;
     default_type text/html;
     location /t {
         default_type text/html;
@@ -1533,6 +1601,7 @@ XacAC
 
 === TEST 60: nested pending matched
 --- config
+    replace_filter_max_buffered_size 4;
     default_type text/html;
     location /t {
         default_type text/html;
@@ -1558,6 +1627,7 @@ aXhik
 
 === TEST 61: test split chain with b_sane=1, next=NULL
 --- config
+    replace_filter_max_buffered_size 4;
     default_type text/html;
 
     location = /t {
@@ -1585,6 +1655,7 @@ ababX
 
 === TEST 62: test split chain with b_sane=1, next not NULL
 --- config
+    replace_filter_max_buffered_size 6;
     default_type text/html;
 
     location = /t {
@@ -1613,6 +1684,7 @@ ababX
 
 === TEST 63: trim leading spaces (1 byte at a time)
 --- config
+    replace_filter_max_buffered_size 0;
     default_type text/html;
     location /a.html {
     }
@@ -1653,6 +1725,7 @@ abc
 
 === TEST 64: split ctx->pending into ctx->pending and ctx->free
 --- config
+    replace_filter_max_buffered_size 3;
     default_type text/html;
 
     location = /t {
@@ -1668,7 +1741,7 @@ abc
 GET /t
 --- stap2 eval: $::StapOutputChains
 --- stap3
-probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1217") {
+probe process("nginx").statement("*@ngx_http_replace_filter_module.c:1482") {
     print_ubacktrace()
 }
 --- response_body
