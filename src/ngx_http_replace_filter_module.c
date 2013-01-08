@@ -1323,7 +1323,7 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_str_value(conf->value, prev->value, "");
     ngx_conf_merge_size_value(conf->max_buffered_size,
                               prev->max_buffered_size,
-                              (size_t) 2 * ngx_pagesize);
+                              8192);
 
     if (conf->program == NULL) {
         conf->program = prev->program;
