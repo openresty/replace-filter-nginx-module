@@ -1751,3 +1751,54 @@ d
 [alert]
 [error]
 
+
+
+=== TEST 65: trim both leading and trailing spaces (1 byte at a time)
+--- config
+    default_type text/html;
+    replace_filter_max_buffered_size 2;
+    location /t {
+        echo -n 'a';
+        echo_sleep 0.001;
+        echo ' ';
+        echo_sleep 0.001;
+        echo '';
+        echo_sleep 0.001;
+        echo ' ';
+        echo_sleep 0.001;
+        echo "b";
+        echo_sleep 0.001;
+        echo " ";
+        replace_filter '^\s+|\s+$' '' g;
+    }
+
+    location = /main {
+        echo_location_async /t1;
+        echo_location_async /t2;
+        echo_location_async /t3;
+        echo_location_async /t4;
+        echo_location_async /t5;
+        echo_location_async /t6;
+    }
+
+--- stap3 eval: $::StapOutputChains
+--- request
+GET /main
+--- response_body
+a
+b
+a
+b
+a
+b
+a
+b
+a
+b
+a
+b
+
+--- no_error_log
+[alert]
+[error]
+
