@@ -12,6 +12,7 @@
 #include "ddebug.h"
 
 
+#include "ngx_http_replace_script.h"
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
@@ -30,7 +31,8 @@ typedef struct {
 
 typedef struct {
     ngx_str_t                  match;
-    ngx_str_t                  value;
+
+    ngx_http_replace_complex_value_t     replace;
 
     ngx_flag_t                 once;
     sre_uint_t                 ncaps;
@@ -59,6 +61,8 @@ typedef struct {
     ngx_chain_t              **last_pending2;
 
     ngx_buf_t                 *buf;
+
+    ngx_str_t                  sub;
 
     u_char                    *pos;
     u_char                    *copy_start;
@@ -401,13 +405,25 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             dd("free data buf: %p", b);
 
-            dd("emit replaced value: \"%.*s\"", (int) rlcf->value.len,
-               rlcf->value.data);
+            dd("emit replaced value: \"%.*s\"", (int) rlcf->replace.len,
+               rlcf->replace.data);
 
-            if (rlcf->value.len) {
+            if (ctx->sub.data == NULL || rlcf->replace.capture_variables) {
+
+                if (ngx_http_replace_complex_value(r, NULL, rlcf->ncaps,
+                                                   ctx->ovector,
+                                                   &rlcf->replace,
+                                                   &ctx->sub)
+                    != NGX_OK)
+                {
+                    return NGX_ERROR;
+                }
+            }
+
+            if (ctx->sub.len) {
                 b->memory = 1;
-                b->pos = rlcf->value.data;
-                b->last = rlcf->value.data + rlcf->value.len;
+                b->pos = ctx->sub.data;
+                b->last = ctx->sub.data + ctx->sub.len;
 
             } else {
                 b->sync = 1;
@@ -1176,7 +1192,8 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     sre_regex_t     *re;
     sre_program_t   *prog;
 
-    ngx_pool_cleanup_t              *cln;
+    ngx_pool_cleanup_t                          *cln;
+    ngx_http_replace_compile_complex_value_t     ccv;
 
     if (rlcf->match.len) {
         return "is duplicate";
@@ -1186,8 +1203,21 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     rlcf->match = value[1];
 
-    /* XXX check variable usage in the value */
-    rlcf->value = value[2];
+    ngx_memzero(&ccv, sizeof(ngx_http_replace_compile_complex_value_t));
+
+    ccv.cf = cf;
+    ccv.value = &value[2];
+    ccv.complex_value = &rlcf->replace;
+
+    if (ngx_http_replace_compile_complex_value(&ccv) != NGX_OK) {
+        return NGX_CONF_ERROR;
+    }
+
+    /* check variable usage in rlcf->replace */
+
+    if (rlcf->replace.capture_variables) {
+        return "does not support capturing variables yet";
+    }
 
     rlcf->once = 1;  /* default to once */
 
@@ -1320,7 +1350,11 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     ngx_conf_merge_value(conf->once, prev->once, 1);
     ngx_conf_merge_str_value(conf->match, prev->match, "");
-    ngx_conf_merge_str_value(conf->value, prev->value, "");
+
+    if (conf->replace.value.len == 0) {
+        conf->replace = prev->replace;
+    }
+
     ngx_conf_merge_size_value(conf->max_buffered_size,
                               prev->max_buffered_size,
                               8192);

@@ -97,6 +97,15 @@ Multiple options can be combined in a single string argument, for example:
 
     replace_filter hello hiya ig;
 
+Nginx variables can be interpolated into the text to be replaced, for example:
+
+    replace_filter \w+ "[$foo,$bar]";
+
+If you want to use the literal dollar sign character (`$`), use the `$$` sequence for that,
+for instance:
+
+    replace_filter \w "$$";
+
 replace_filter_types
 --------------------
 
@@ -155,7 +164,6 @@ TODO
 * reduce the amount of data that has to be buffered for when an partial match is already found.
 * recycle the memory blocks used to buffer the pending capture data.
 * allow use of submatch capture variables in the text to be replaced, like `$&`, `$1`, `$2`, and etc.
-* allow use of Nginx variables to be interpolated in either the regex patterns or text to be replaced.
 * allow use of inlined Lua code as the `replacement` argument of the `replace_filter` directive to generate the text to be replaced on-the-fly.
 
 Community

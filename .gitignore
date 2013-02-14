@@ -36,3 +36,5 @@ build12
 re
 *.plist
 Makefile
+src/script.[ch]
+*.patch
