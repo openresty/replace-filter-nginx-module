@@ -1507,7 +1507,7 @@ aXc
     replace_filter_types text/css text/plain;
     location /t {
         echo abc;
-        replace_filter_types text/html;
+        replace_filter_types text/javascript;
         replace_filter b X;
     }
 --- request
