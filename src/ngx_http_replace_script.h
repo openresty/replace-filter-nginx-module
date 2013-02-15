@@ -52,7 +52,7 @@ typedef struct {
 
     sre_int_t                  *captures;
     ngx_uint_t                  ncaptures;
-    u_char                     *captures_data;
+    ngx_chain_t                *captures_data;
 
     unsigned                    skip:1;
 
@@ -86,10 +86,10 @@ typedef struct {
 
 
 ngx_int_t ngx_http_replace_compile_complex_value(
-        ngx_http_replace_compile_complex_value_t *ccv);
-ngx_int_t ngx_http_replace_complex_value(ngx_http_request_t *r, ngx_str_t *subj,
-        sre_uint_t ncaps, sre_int_t *cap,
-        ngx_http_replace_complex_value_t *val, ngx_str_t *value);
+    ngx_http_replace_compile_complex_value_t *ccv);
+ngx_int_t ngx_http_replace_complex_value(ngx_http_request_t *r,
+    ngx_chain_t *captured, sre_uint_t ncaps, sre_int_t *cap,
+    ngx_http_replace_complex_value_t *val, ngx_str_t *value);
 
 
 #endif /* _NGX_HTTP_REPLACE_SCRIPT_H_INCLUDED_ */

@@ -111,9 +111,9 @@ ngx_http_replace_compile_complex_value(
 
 
 ngx_int_t
-ngx_http_replace_complex_value(ngx_http_request_t *r, ngx_str_t *subj,
-    sre_uint_t ncaps, sre_int_t *cap, ngx_http_replace_complex_value_t *val,
-    ngx_str_t *value)
+ngx_http_replace_complex_value(ngx_http_request_t *r,
+    ngx_chain_t *captured, sre_uint_t ncaps, sre_int_t *cap,
+    ngx_http_replace_complex_value_t *val, ngx_str_t *value)
 {
     size_t                                len;
     ngx_http_replace_script_code_pt       code;
@@ -128,13 +128,9 @@ ngx_http_replace_complex_value(ngx_http_request_t *r, ngx_str_t *subj,
     ngx_memzero(&e, sizeof(ngx_http_replace_script_engine_t));
 
     e.request = r;
-    e.ncaptures = ncaps * 2;
-
-    if (subj) {
-        e.captures = cap;
-        e.captures_data = subj->data;
-    }
-
+    e.ncaptures = (ncaps + 1) * 2;
+    e.captures_data = captured;
+    e.captures = cap;
     e.ip = val->lengths;
 
     len = 0;
@@ -201,7 +197,9 @@ ngx_http_replace_script_compile(ngx_http_replace_script_compile_t *sc)
                 continue;
             }
 
-            if (sc->source->data[i] >= '1' && sc->source->data[i] <= '9') {
+            if ((sc->source->data[i] >= '1' && sc->source->data[i] <= '9')
+                || sc->source->data[i] == '&')
+            {
                 num_var = 1;
                 n = 0;
 
@@ -216,7 +214,9 @@ ngx_http_replace_script_compile(ngx_http_replace_script_compile_t *sc)
                     goto invalid_variable;
                 }
 
-                if (sc->source->data[i] >= '1' && sc->source->data[i] <= '9') {
+                if ((sc->source->data[i] >= '1' && sc->source->data[i] <= '9')
+                    || sc->source->data[i] == '&')
+                {
                     num_var = 1;
                     n = 0;
                 }
@@ -238,9 +238,14 @@ ngx_http_replace_script_compile(ngx_http_replace_script_compile_t *sc)
                 }
 
                 if (num_var) {
-                    if (ch >= '1' && ch <= '9') {
+                    if (ch >= '0' && ch <= '9') {
                         n = n * 10 + (ch - '0');
                         continue;
+                    }
+
+                    if (ch == '&') {
+                        i++;
+                        name.len++;
                     }
 
                     break;
@@ -443,7 +448,9 @@ ngx_http_replace_script_copy_capture_len_code(
 
     n = code->n;
 
-    if (n < e->ncaptures) {
+    dd("group index: %d, ncaptures: %d", (int) n, (int) e->ncaptures);
+
+    if (n + 1 < e->ncaptures) {
         cap = e->captures;
         return cap[n + 1] - cap[n];
     }
@@ -455,9 +462,10 @@ ngx_http_replace_script_copy_capture_len_code(
 static void
 ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
 {
-    sre_int_t                            *cap;
+    sre_int_t                            *cap, from, to, len;
     u_char                               *p, *pos;
     ngx_uint_t                            n;
+    ngx_chain_t                          *cl;
 
     ngx_http_replace_script_capture_code_t  *code;
 
@@ -472,9 +480,28 @@ ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
     if (n < e->ncaptures) {
 
         cap = e->captures;
-        p = e->captures_data;
+        from = cap[n];
+        to = cap[n + 1];
 
-        e->pos = ngx_copy(pos, &p[cap[n]], cap[n + 1] - cap[n]);
+        dd("captures data: %p", e->captures_data);
+
+        for (cl = e->captures_data; cl; cl = cl->next) {
+
+            if (from >= cl->buf->file_last) {
+                continue;
+            }
+
+            /* from < cl->buf->file_last */
+
+            if (to <= cl->buf->file_pos) {
+                break;
+            }
+
+            p = cl->buf->pos + (from - cl->buf->file_pos);
+            len = ngx_min(cl->buf->file_last, to) - from;
+            e->pos = ngx_copy(e->pos, p, len);
+            from += len;
+        }
     }
 
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, e->request->connection->log, 0,

@@ -106,6 +106,12 @@ for instance:
 
     replace_filter \w "$$";
 
+Use of submatch capturing variables like `$&`, `$1`, `$2`, and etc are also supported, for example,
+
+    replace_filter [bc]|d [$&-$1-$2] g;
+
+The semantics of the submatch capturing variables is exactly the same as in the Perl 5 language.
+
 replace_filter_types
 --------------------
 
@@ -163,7 +169,6 @@ TODO
 * implement multiple `replace_filter` directives in a single location. All the patterns will be applied at the same time as in a tokenizer. We will *not* use the longest token match semantics, but rather, patterns will be prioritized according to their order in the configure file.
 * reduce the amount of data that has to be buffered for when an partial match is already found.
 * recycle the memory blocks used to buffer the pending capture data.
-* allow use of submatch capture variables in the text to be replaced, like `$&`, `$1`, `$2`, and etc.
 * allow use of inlined Lua code as the `replacement` argument of the `replace_filter` directive to generate the text to be replaced on-the-fly.
 
 Community

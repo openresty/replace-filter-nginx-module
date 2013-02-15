@@ -30,23 +30,6 @@ typedef struct {
 
 
 typedef struct {
-    ngx_str_t                  match;
-
-    ngx_http_replace_complex_value_t     replace;
-
-    ngx_flag_t                 once;
-    sre_uint_t                 ncaps;
-    size_t                     ovecsize;
-    sre_program_t             *program;
-
-    ngx_hash_t                 types;
-    ngx_array_t               *types_keys;
-
-    size_t                     max_buffered_size;
-} ngx_http_replace_loc_conf_t;
-
-
-typedef struct {
     sre_int_t                  stream_pos;
     sre_int_t                 *ovector;
     sre_pool_t                *vm_pool;
@@ -76,6 +59,8 @@ typedef struct {
     ngx_chain_t               *special;
     ngx_chain_t              **last_special;
     ngx_chain_t               *rematch;
+    ngx_chain_t               *captured;
+    ngx_chain_t              **last_captured;
 
     size_t                     total_buffered;
 
@@ -86,11 +71,35 @@ typedef struct {
 } ngx_http_replace_ctx_t;
 
 
-static ngx_int_t ngx_http_replace_output(ngx_http_request_t *r,
-    ngx_http_replace_ctx_t *ctx);
-static ngx_int_t ngx_http_replace_parse(ngx_http_request_t *r,
+typedef ngx_int_t (*ngx_http_replace_parse_buf_pt)(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch);
 
+
+typedef struct {
+    ngx_str_t                  match;
+
+    ngx_http_replace_complex_value_t     replace;
+
+    ngx_flag_t                 once;
+    sre_uint_t                 ncaps;
+    size_t                     ovecsize;
+    sre_program_t             *program;
+
+    ngx_hash_t                 types;
+    ngx_array_t               *types_keys;
+
+    size_t                     max_buffered_size;
+
+    ngx_http_replace_parse_buf_pt       parse_buf;
+} ngx_http_replace_loc_conf_t;
+
+
+static ngx_int_t ngx_http_replace_output(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx);
+static ngx_int_t ngx_http_replace_non_capturing_parse(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch);
+static ngx_int_t ngx_http_replace_capturing_parse(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch);
 static char * ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static void *ngx_http_replace_create_loc_conf(ngx_conf_t *cf);
@@ -202,6 +211,7 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
     ctx->last_special = &ctx->special;
     ctx->last_pending = &ctx->pending;
     ctx->last_pending2 = &ctx->pending2;
+    ctx->last_captured = &ctx->captured;
 
     ctx->ovector = ngx_palloc(r->pool, rlcf->ovecsize);
     if (ctx->ovector == NULL) {
@@ -326,7 +336,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         while (ctx->pos < ctx->buf->last
                || (ctx->special_buf && ctx->last_buf))
         {
-            rc = ngx_http_replace_parse(r, ctx, rematch);
+            rc = rlcf->parse_buf(r, ctx, rematch);
 
             ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                            "replace filter parse: %d, %p-%p",
@@ -405,12 +415,10 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             dd("free data buf: %p", b);
 
-            dd("emit replaced value: \"%.*s\"", (int) rlcf->replace.len,
-               rlcf->replace.data);
-
             if (ctx->sub.data == NULL || rlcf->replace.capture_variables) {
 
-                if (ngx_http_replace_complex_value(r, NULL, rlcf->ncaps,
+                if (ngx_http_replace_complex_value(r, ctx->captured,
+                                                   rlcf->ncaps,
                                                    ctx->ovector,
                                                    &rlcf->replace,
                                                    &ctx->sub)
@@ -418,7 +426,20 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 {
                     return NGX_ERROR;
                 }
+
+                /* release ctx->captured */
+                if (ctx->captured) {
+                    dd("release ctx captured: %p", ctx->captured);
+                    *ctx->last_captured = ctx->free;
+                    ctx->free = ctx->captured;
+
+                    ctx->captured = NULL;
+                    ctx->last_captured = &ctx->captured;
+                }
             }
+
+            dd("emit replaced value: \"%.*s\"", (int) ctx->sub.len,
+               ctx->sub.data);
 
             if (ctx->sub.len) {
                 b->memory = 1;
@@ -635,8 +656,358 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
 
 static ngx_int_t
-ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
-    ngx_chain_t *rematch)
+ngx_http_replace_capturing_parse(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch)
+{
+    sre_int_t              ret, from, to;
+    ngx_int_t              rc;
+    ngx_chain_t           *new_rematch = NULL;
+    ngx_chain_t           *cl;
+    ngx_chain_t          **last_rematch, **last;
+    size_t                 len;
+
+    if (ctx->once || ctx->vm_done) {
+        ctx->copy_start = ctx->pos;
+        ctx->copy_end = ctx->buf->last;
+        ctx->pos = ctx->buf->last;
+
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "once");
+
+        return NGX_AGAIN;
+    }
+
+    len = ctx->buf->last - ctx->pos;
+
+    dd("=== process data chunk %p len=%d, pos=%u, special=%u, "
+       "last=%u, \"%.*s\"", ctx->buf, (int) (ctx->buf->last - ctx->pos),
+       (int) (ctx->pos - ctx->buf->pos + ctx->stream_pos),
+       ctx->special_buf, ctx->last_buf,
+       (int) (ctx->buf->last - ctx->pos), ctx->pos);
+
+    ret = sre_vm_pike_exec(ctx->vm_ctx, ctx->pos, len, ctx->last_buf, NULL);
+
+    dd("vm pike exec: %d", (int) ret);
+
+    switch (ret) {
+    case SRE_OK:
+        ctx->total_buffered = 0;
+
+        from = ctx->ovector[0];
+        to = ctx->ovector[1];
+
+        dd("pike vm ok: (%d, %d)", (int) from, (int) to);
+
+        if (from >= ctx->stream_pos) {
+            /* the match is completely on the current buf */
+
+            if (ctx->pending) {
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            /* prepare ctx->captured */
+
+            cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
+            if (cl == NULL) {
+                return NGX_ERROR;
+            }
+
+            cl->buf->pos = ctx->buf->pos;
+            cl->buf->last = ctx->buf->last;
+            cl->buf->memory = 1;
+            cl->buf->file_pos = ctx->stream_pos;
+            cl->buf->file_last = ctx->stream_pos
+                                 + (cl->buf->last - cl->buf->pos);
+
+            *ctx->last_captured = cl;
+            ctx->last_captured = &cl->next;
+
+            dd("ctx captured: %p", ctx->captured);
+
+            /* prepare copy-out data */
+
+            ctx->copy_start = ctx->pos;
+            ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
+
+            dd("copy len: %d", (int) (ctx->copy_end - ctx->copy_start));
+
+            ctx->pos = ctx->buf->pos + (to - ctx->stream_pos);
+            return NGX_OK;
+        }
+
+        /* from < ctx->stream_pos */
+
+        if (ctx->pending) {
+
+            if (ngx_http_replace_split_chain(r, ctx, &ctx->pending,
+                                             &ctx->last_pending, from,
+                                             &cl, &last, 1)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+
+            if (ctx->pending) {
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            if (cl) {
+                if (to >= ctx->stream_pos) {
+                    /* no pending data to be rematched */
+
+                    if (to == ctx->stream_pos) {
+                        *ctx->last_captured = cl;
+                        ctx->last_captured = &cl->next;
+
+                    } else {
+                        *ctx->last_captured = cl;
+                        ctx->last_captured = last;
+
+                        cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
+                        if (cl == NULL) {
+                            return NGX_ERROR;
+                        }
+
+                        cl->buf->pos = ctx->buf->pos;
+                        cl->buf->last = ctx->buf->last;
+                        cl->buf->memory = 1;
+                        cl->buf->file_pos = ctx->stream_pos;
+                        cl->buf->file_last = ctx->stream_pos
+                                             + (cl->buf->last - cl->buf->pos);
+
+                        *ctx->last_captured = cl;
+                        ctx->last_captured = &cl->next;
+                    }
+
+                } else {
+                    /* there's pending data to be rematched */
+
+                    if (ngx_http_replace_split_chain(r, ctx, &cl,
+                                                     &last,
+                                                     to, &new_rematch,
+                                                     &last_rematch, 1)
+                        != NGX_OK)
+                    {
+                        return NGX_ERROR;
+                    }
+
+                    if (cl) {
+                        *ctx->last_captured = cl;
+                        ctx->last_captured = last;
+                    }
+
+                    if (new_rematch) {
+                        if (rematch) {
+                            ctx->rematch = rematch;
+                        }
+
+                        /* prepend cl to ctx->rematch */
+                        *last_rematch = ctx->rematch;
+                        ctx->rematch = new_rematch;
+                    }
+                }
+            }
+        }
+
+#if (DDEBUG)
+        ngx_http_replace_dump_chain("ctx->rematch", &ctx->rematch, NULL);
+#endif
+
+        ctx->copy_start = NULL;
+        ctx->copy_end = NULL;
+
+        ctx->pos = ctx->buf->pos + (to - ctx->stream_pos);
+
+        return new_rematch ? NGX_BUSY : NGX_OK;
+
+    case SRE_AGAIN:
+        from = ctx->ovector[0];
+        to = ctx->ovector[1];
+
+        dd("pike vm again: (%d, %d)", (int) from, (int) to);
+
+        if (from == -1) {
+            from = ctx->stream_pos + (ctx->buf->last - ctx->buf->pos);
+        }
+
+        if (to == -1) {
+            to = ctx->stream_pos + (ctx->buf->last - ctx->buf->pos);
+        }
+
+        dd("pike vm again (adjusted): stream pos:%d, (%d, %d)",
+           (int) ctx->stream_pos, (int) from, (int) to);
+
+        if (from > to) {
+            ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
+                          "invalid capture range: %i > %i", (ngx_int_t) from,
+                          (ngx_int_t) to);
+            return NGX_ERROR;
+        }
+
+        if (from == to) {
+            if (ctx->pending) {
+                ctx->total_buffered = 0;
+
+                dd("output pending");
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            ctx->copy_start = ctx->pos;
+            ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
+            ctx->pos = ctx->copy_end;
+
+            return NGX_AGAIN;
+        }
+
+        /*
+         * append the existing ctx->pending data right before
+         * the $& capture to ctx->out.
+         */
+
+        if (from >= ctx->stream_pos) {
+            /* the match is completely on the current buf */
+
+            ctx->copy_start = ctx->pos;
+            ctx->copy_end = ctx->buf->pos + (from - ctx->stream_pos);
+
+            if (ctx->pending) {
+                ctx->total_buffered = 0;
+
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            dd("create ctx->pending as (%ld, %ld)", (long) from, (long) to);
+            rc = ngx_http_replace_new_pending_buf(r, ctx, from, to, &cl);
+            if (rc == NGX_ERROR) {
+                return NGX_ERROR;
+            }
+
+#if 1
+            if (rc == NGX_BUSY) {
+                dd("stop processing because of buffer size limit reached");
+                ctx->once = 1;
+                ctx->copy_start = ctx->pos;
+                ctx->copy_end = ctx->buf->last;
+                ctx->pos = ctx->buf->last;
+                return NGX_AGAIN;
+            }
+#endif
+
+            *ctx->last_pending = cl;
+            ctx->last_pending = &cl->next;
+
+            ctx->pos = ctx->buf->last;
+
+            return NGX_AGAIN;
+        }
+
+        dd("from < ctx->stream_pos");
+
+        if (ctx->pending) {
+            /* split ctx->pending into ctx->out and ctx->pending */
+
+            if (ngx_http_replace_split_chain(r, ctx, &ctx->pending,
+                                             &ctx->last_pending, from, &cl,
+                                             &last, 1)
+                != NGX_OK)
+            {
+                return NGX_ERROR;
+            }
+
+            if (ctx->pending) {
+                dd("adjust pending: pos=%d, from=%d",
+                   (int) ctx->pending->buf->file_pos, (int) from);
+
+                ctx->total_buffered -= (size_t)
+                    (from - ctx->pending->buf->file_pos);
+
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            if (cl) {
+                dd("splitted ctx->pending into ctx->out and ctx->pending: %d",
+                   (int) ctx->total_buffered);
+
+                ctx->pending = cl;
+                ctx->last_pending = last;
+            }
+        }
+
+        /* new pending data to buffer to ctx->pending */
+
+        rc = ngx_http_replace_new_pending_buf(r, ctx, ctx->pos
+                                              - ctx->buf->pos
+                                              + ctx->stream_pos, to, &cl);
+        if (rc == NGX_ERROR) {
+            return NGX_ERROR;
+        }
+
+#if 1
+        if (rc == NGX_BUSY) {
+            ctx->once = 1;
+
+            if (ctx->pending) {
+                *ctx->last_out = ctx->pending;
+                ctx->last_out = ctx->last_pending;
+
+                ctx->pending = NULL;
+                ctx->last_pending = &ctx->pending;
+            }
+
+            ctx->copy_start = ctx->pos;
+            ctx->copy_end = ctx->buf->last;
+            ctx->pos = ctx->buf->last;
+
+            return NGX_AGAIN;
+        }
+#endif
+
+        *ctx->last_pending = cl;
+        ctx->last_pending = &cl->next;
+
+        ctx->copy_start = NULL;
+        ctx->copy_end = NULL;
+
+        ctx->pos = ctx->buf->last;
+
+        return NGX_AGAIN;
+
+    case SRE_DECLINED:
+        ctx->total_buffered = 0;
+
+        return NGX_DECLINED;
+
+    default:
+        /* SRE_ERROR */
+        return NGX_ERROR;
+    }
+
+    /* cannot reach here */
+}
+
+
+static ngx_int_t
+ngx_http_replace_non_capturing_parse(ngx_http_request_t *r,
+    ngx_http_replace_ctx_t *ctx, ngx_chain_t *rematch)
 {
     sre_int_t              ret, from, to, mfrom = -1, mto = -1;
     ngx_int_t              rc;
@@ -677,8 +1048,6 @@ ngx_http_replace_parse(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx,
         to = ctx->ovector[1];
 
         dd("pike vm ok: (%d, %d)", (int) from, (int) to);
-
-        new_rematch = 0;
 
         if (from >= ctx->stream_pos) {
             /* the match is completely on the current buf */
@@ -1216,8 +1585,15 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     /* check variable usage in rlcf->replace */
 
     if (rlcf->replace.capture_variables) {
-        return "does not support capturing variables yet";
+        rlcf->parse_buf = ngx_http_replace_capturing_parse;
+
+    } else {
+        rlcf->parse_buf = ngx_http_replace_non_capturing_parse;
     }
+
+#if 0
+    rlcf->parse_buf = ngx_http_replace_capturing_parse;
+#endif
 
     rlcf->once = 1;  /* default to once */
 
@@ -1333,6 +1709,7 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
      *     conf->program = NULL;
      *     conf->ncaps = 0;
      *     conf->ovecsize = 0;
+     *     conf->parse_buf = NULL;
      */
 
     conf->once = NGX_CONF_UNSET;
@@ -1353,6 +1730,10 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 
     if (conf->replace.value.len == 0) {
         conf->replace = prev->replace;
+    }
+
+    if (conf->parse_buf == NULL) {
+        conf->parse_buf = prev->parse_buf;
     }
 
     ngx_conf_merge_size_value(conf->max_buffered_size,
@@ -1552,11 +1933,13 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
     rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
     if (ctx->total_buffered > rlcf->max_buffered_size) {
+#if 1
         ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
                       "replace filter: exceeding "
                       "replace_filter_max_buffered_size (%uz): %uz",
                       rlcf->max_buffered_size, ctx->total_buffered);
         return NGX_BUSY;
+#endif
     }
 
     cl = ngx_http_replace_get_free_buf(r->pool, &ctx->free);
