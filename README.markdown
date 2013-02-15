@@ -65,7 +65,7 @@ feature list, check out sregex's documentation:
 
 https://github.com/agentzh/sregex#syntax-supported
 
-Response body data is only buffered when absolutely necessary, like facing an incomplete capture that belongs to a possible match.
+Response body data is only buffered when absolutely necessary, like facing an incomplete capture that belongs to a possible match near the data chunk boundaries.
 
 Directives
 ==========
