@@ -78,7 +78,7 @@ replace_filter
 
 **default:** *no*
 
-**context:** *http, server, location*
+**context:** *http, server, location, location if*
 
 **phase:** *output body filter*
 
@@ -119,7 +119,7 @@ replace_filter_types
 
 **default:** *replace_filter_types text/html*
 
-**context:** *http, server, location*
+**context:** *http, server, location, location if*
 
 **phase:** *output body filter*
 
@@ -133,7 +133,7 @@ replace_filter_max_buffered_size
 
 **default:** *replace_filter_max_buffered_size 8k*
 
-**context:** *http, server, location*
+**context:** *http, server, location, location if*
 
 **phase:** *output body filter*
 

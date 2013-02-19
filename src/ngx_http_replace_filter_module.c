@@ -128,21 +128,24 @@ static void ngx_http_replace_check_total_buffered(ngx_http_request_t *r,
 static ngx_command_t  ngx_http_replace_filter_commands[] = {
 
     { ngx_string("replace_filter"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE23,
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE23,
       ngx_http_replace_filter,
       NGX_HTTP_LOC_CONF_OFFSET,
       0,
       NULL },
 
     { ngx_string("replace_filter_types"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_1MORE,
       ngx_http_types_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_replace_loc_conf_t, types_keys),
       &ngx_http_html_default_types[0] },
 
     { ngx_string("replace_filter_max_buffered_size"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
       ngx_conf_set_size_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_replace_loc_conf_t, max_buffered_size),
