@@ -118,7 +118,7 @@ Use of submatch capturing variables like `$&`, `$1`, `$2`, and etc are also supp
 
 The semantics of the submatch capturing variables is exactly the same as in the Perl 5 language.
 
-Multiple `replace_filter` directives in a single location is also supported.
+Multiple `replace_filter` directives in the same scope is also supported.
 All the patterns will be applied at the same time as in a tokenizer.
 We will *not* use the longest token match semantics, but rather, patterns will be prioritized according to their order in
 the configure file.
