@@ -48,6 +48,8 @@ Synopsis
         # proxy_pass/fastcgi_pass/root/...
 
         # remove all those ugly C/C++ comments:
+        replace_filter "'(?:\\\\[^\n]|[^'\n])*'" $& g;
+        replace_filter '"(?:\\\\[^\n]|[^"\n])*"' $& g;
         replace_filter '/\*.*?\*/|//[^\n]*' '' g;
     }
 
@@ -112,6 +114,17 @@ Use of submatch capturing variables like `$&`, `$1`, `$2`, and etc are also supp
 
 The semantics of the submatch capturing variables is exactly the same as in the Perl 5 language.
 
+Multiple `replace_filter` directives in a single location is also supported.
+All the patterns will be applied at the same time as in a tokenizer.
+We will *not* use the longest token match semantics, but rather, patterns will be prioritized according to their order in
+the configure file.
+
+Here is an example for removing all the C/C++ comments from a C/C++ source code file:
+
+    replace_filter "'(?:\\\\[^\n]|[^'\n])*'" $& g;
+    replace_filter '"(?:\\\\[^\n]|[^"\n])*"' $& g;
+    replace_filter '/\*.*?\*/|//[^\n]*' '' g;
+
 replace_filter_types
 --------------------
 
@@ -166,7 +179,7 @@ assuming that your sregex is installed to the prefix `/opt/sregex`.
 TODO
 ====
 
-* implement multiple `replace_filter` directives in a single location. All the patterns will be applied at the same time as in a tokenizer. We will *not* use the longest token match semantics, but rather, patterns will be prioritized according to their order in the configure file.
+* optimize the special case for verbatim substitutions, i.e., `replace_filter <regex> $&;`.
 * implement the `replace_filter_skip $var` directive to control whether to enable the filter on the fly.
 * reduce the amount of data that has to be buffered for when an partial match is already found.
 * recycle the memory blocks used to buffer the pending capture data and "complex values" for replacement.

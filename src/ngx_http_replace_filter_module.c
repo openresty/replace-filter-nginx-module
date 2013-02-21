@@ -30,6 +30,7 @@ typedef struct {
 
 
 typedef struct {
+    sre_int_t                  regex_id;
     sre_int_t                  stream_pos;
     sre_int_t                 *ovector;
     sre_pool_t                *vm_pool;
@@ -45,7 +46,7 @@ typedef struct {
 
     ngx_buf_t                 *buf;
 
-    ngx_str_t                  sub;
+    ngx_str_t                 *sub;
 
     u_char                    *pos;
     u_char                    *copy_start;
@@ -61,6 +62,8 @@ typedef struct {
     ngx_chain_t               *rematch;
     ngx_chain_t               *captured;
     ngx_chain_t              **last_captured;
+    uint8_t                   *disabled;
+    sre_uint_t                 disabled_count;
 
     size_t                     total_buffered;
 
@@ -76,13 +79,15 @@ typedef ngx_int_t (*ngx_http_replace_parse_buf_pt)(ngx_http_request_t *r,
 
 
 typedef struct {
-    ngx_str_t                  match;
-
-    ngx_http_replace_complex_value_t     replace;
-
-    ngx_flag_t                 once;
     sre_uint_t                 ncaps;
     size_t                     ovecsize;
+
+    ngx_array_t                multi_once;  /* of uint8_t */
+    ngx_array_t                regexes;  /* of u_char* */
+    ngx_array_t                multi_flags;  /* of int */
+    ngx_array_t                multi_replace;
+                                     /* of ngx_http_replace_complex_value_t */
+
     sre_program_t             *program;
 
     ngx_hash_t                 types;
@@ -91,6 +96,10 @@ typedef struct {
     size_t                     max_buffered_size;
 
     ngx_http_replace_parse_buf_pt       parse_buf;
+    ngx_http_replace_complex_value_t    verbatim;
+
+    unsigned                   seen_once;  /* :1 */
+    unsigned                   seen_global;  /* :1 */
 } ngx_http_replace_loc_conf_t;
 
 
@@ -123,6 +132,14 @@ static void ngx_http_replace_dump_chain(const char *prefix, ngx_chain_t **pcl,
 #endif
 static void ngx_http_replace_check_total_buffered(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx, sre_int_t len, sre_int_t mlen);
+
+
+#define ngx_http_replace_regex_is_disabled(ctx)                              \
+    ((ctx)->disabled[(ctx)->regex_id / 8] & (1 << ((ctx)->regex_id % 8)))
+
+
+#define ngx_http_replace_regex_set_disabled(ctx)                             \
+    (ctx)->disabled[(ctx)->regex_id / 8] |= (1 << ((ctx)->regex_id % 8))
 
 
 static ngx_command_t  ngx_http_replace_filter_commands[] = {
@@ -193,13 +210,16 @@ static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 static ngx_int_t
 ngx_http_replace_header_filter(ngx_http_request_t *r)
 {
+    size_t                         size;
     ngx_pool_cleanup_t            *cln;
     ngx_http_replace_ctx_t        *ctx;
     ngx_http_replace_loc_conf_t  *rlcf;
 
     rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
-    if (rlcf->match.len == 0
+    dd("replace header filter");
+
+    if (rlcf->regexes.nelts == 0
         || r->headers_out.content_length_n == 0
         || ngx_http_test_content_type(r, &rlcf->types) == NULL)
     {
@@ -216,8 +236,20 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
     ctx->last_pending2 = &ctx->pending2;
     ctx->last_captured = &ctx->captured;
 
+    ctx->sub = ngx_pcalloc(r->pool,
+                           rlcf->multi_replace.nelts * sizeof(ngx_str_t));
+    if (ctx->sub == NULL) {
+        return NGX_ERROR;
+    }
+
     ctx->ovector = ngx_palloc(r->pool, rlcf->ovecsize);
     if (ctx->ovector == NULL) {
+        return NGX_ERROR;
+    }
+
+    size = ngx_align(rlcf->regexes.nelts, 8) / 8;
+    ctx->disabled = ngx_pcalloc(r->pool, size);
+    if (ctx->disabled == NULL) {
         return NGX_ERROR;
     }
 
@@ -275,6 +307,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 {
     ngx_int_t                  rc;
     ngx_buf_t                 *b;
+    ngx_str_t                 *sub;
     ngx_chain_t               *cl, *cur = NULL, *rematch = NULL;
 
     ngx_http_replace_ctx_t        *ctx;
@@ -418,13 +451,25 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             dd("free data buf: %p", b);
 
-            if (ctx->sub.data == NULL || rlcf->replace.capture_variables) {
+            sub = &ctx->sub[ctx->regex_id];
+
+            if (sub->data == NULL
+                || rlcf->parse_buf == ngx_http_replace_capturing_parse)
+            {
+                ngx_http_replace_complex_value_t            *cv;
+
+                if (ngx_http_replace_regex_is_disabled(ctx)) {
+                    cv = &rlcf->verbatim;
+
+                } else {
+                    cv = rlcf->multi_replace.elts;
+                    cv = &cv[ctx->regex_id];
+                }
 
                 if (ngx_http_replace_complex_value(r, ctx->captured,
                                                    rlcf->ncaps,
                                                    ctx->ovector,
-                                                   &rlcf->replace,
-                                                   &ctx->sub)
+                                                   cv, sub)
                     != NGX_OK)
                 {
                     return NGX_ERROR;
@@ -441,13 +486,12 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 }
             }
 
-            dd("emit replaced value: \"%.*s\"", (int) ctx->sub.len,
-               ctx->sub.data);
+            dd("emit replaced value: \"%.*s\"", (int) sub->len, sub->data);
 
-            if (ctx->sub.len) {
+            if (sub->len) {
                 b->memory = 1;
-                b->pos = ctx->sub.data;
-                b->last = ctx->sub.data + ctx->sub.len;
+                b->pos = sub->data;
+                b->last = sub->data + sub->len;
 
             } else {
                 b->sync = 1;
@@ -459,8 +503,24 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             *ctx->last_out = cl;
             ctx->last_out = &cl->next;
 
-            if (!ctx->once) {
-                ctx->once = rlcf->once;
+            if (!ctx->once && !ngx_http_replace_regex_is_disabled(ctx)) {
+                uint8_t    *once;
+
+                once = rlcf->multi_once.elts;
+
+                if (rlcf->regexes.nelts == 1) {
+                    ctx->once = once[0];
+
+                } else {
+                    if (once[ctx->regex_id]) {
+                        ngx_http_replace_regex_set_disabled(ctx);
+                        if (!rlcf->seen_global
+                            && ++ctx->disabled_count == rlcf->regexes.nelts)
+                        {
+                            ctx->once = 1;
+                        }
+                    }
+                }
             }
 
             if (rc == NGX_BUSY) {
@@ -669,6 +729,8 @@ ngx_http_replace_capturing_parse(ngx_http_request_t *r,
     ngx_chain_t          **last_rematch, **last;
     size_t                 len;
 
+    dd("replace capturing parse");
+
     if (ctx->once || ctx->vm_done) {
         ctx->copy_start = ctx->pos;
         ctx->copy_end = ctx->buf->last;
@@ -691,8 +753,8 @@ ngx_http_replace_capturing_parse(ngx_http_request_t *r,
 
     dd("vm pike exec: %d", (int) ret);
 
-    switch (ret) {
-    case SRE_OK:
+    if (ret >= 0) {
+        ctx->regex_id       = ret;
         ctx->total_buffered = 0;
 
         from = ctx->ovector[0];
@@ -829,7 +891,9 @@ ngx_http_replace_capturing_parse(ngx_http_request_t *r,
         ctx->pos = ctx->buf->pos + (to - ctx->stream_pos);
 
         return new_rematch ? NGX_BUSY : NGX_OK;
+    }
 
+    switch (ret) {
     case SRE_AGAIN:
         from = ctx->ovector[0];
         to = ctx->ovector[1];
@@ -1020,6 +1084,8 @@ ngx_http_replace_non_capturing_parse(ngx_http_request_t *r,
     size_t                 len;
     sre_int_t             *pending_matched;
 
+    dd("replace non capturing parse");
+
     if (ctx->once || ctx->vm_done) {
         ctx->copy_start = ctx->pos;
         ctx->copy_end = ctx->buf->last;
@@ -1043,8 +1109,8 @@ ngx_http_replace_non_capturing_parse(ngx_http_request_t *r,
 
     dd("vm pike exec: %d", (int) ret);
 
-    switch (ret) {
-    case SRE_OK:
+    if (ret >= 0) {
+        ctx->regex_id = ret;
         ctx->total_buffered = 0;
 
         from = ctx->ovector[0];
@@ -1145,7 +1211,9 @@ ngx_http_replace_non_capturing_parse(ngx_http_request_t *r,
         ctx->pos = ctx->buf->pos + (to - ctx->stream_pos);
 
         return new_rematch ? NGX_BUSY : NGX_OK;
+    }
 
+    switch (ret) {
     case SRE_AGAIN:
         from = ctx->ovector[0];
         to = ctx->ovector[1];
@@ -1554,43 +1622,47 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_http_replace_loc_conf_t     *rlcf = conf;
     ngx_http_replace_main_conf_t    *rmcf;
 
-    int              flags = 0;
-    sre_int_t        err_offset;
-    ngx_str_t        prefix, suffix;
-    u_char          *p;
+    int             *flags;
+    u_char          *p, **re;
     ngx_str_t       *value;
     ngx_uint_t       i;
-    sre_pool_t      *ppool; /* parser pool */
-    sre_regex_t     *re;
-    sre_program_t   *prog;
+    uint8_t         *once;
 
     ngx_pool_cleanup_t                          *cln;
+    ngx_http_replace_complex_value_t            *cv;
     ngx_http_replace_compile_complex_value_t     ccv;
-
-    if (rlcf->match.len) {
-        return "is duplicate";
-    }
 
     value = cf->args->elts;
 
-    rlcf->match = value[1];
+    re = ngx_array_push(&rlcf->regexes);
+    if (re == NULL) {
+        return NGX_CONF_ERROR;
+    }
 
+    *re = value[1].data;
+
+    cv = ngx_array_push(&rlcf->multi_replace);
+    if (cv == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    ngx_memzero(cv, sizeof(ngx_http_replace_complex_value_t));
     ngx_memzero(&ccv, sizeof(ngx_http_replace_compile_complex_value_t));
 
     ccv.cf = cf;
     ccv.value = &value[2];
-    ccv.complex_value = &rlcf->replace;
+    ccv.complex_value = cv;
 
     if (ngx_http_replace_compile_complex_value(&ccv) != NGX_OK) {
         return NGX_CONF_ERROR;
     }
 
-    /* check variable usage in rlcf->replace */
+    /* check variable usage in the "replace" argument */
 
-    if (rlcf->replace.capture_variables) {
+    if (cv->capture_variables) {
         rlcf->parse_buf = ngx_http_replace_capturing_parse;
 
-    } else {
+    } else if (rlcf->parse_buf == NULL) {
         rlcf->parse_buf = ngx_http_replace_non_capturing_parse;
     }
 
@@ -1598,7 +1670,17 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     rlcf->parse_buf = ngx_http_replace_capturing_parse;
 #endif
 
-    rlcf->once = 1;  /* default to once */
+    flags = ngx_array_push(&rlcf->multi_flags);
+    if (flags == NULL) {
+        return NGX_CONF_ERROR;
+    }
+    *flags = 0;
+
+    once = ngx_array_push(&rlcf->multi_once);
+    if (once == NULL) {
+        return NGX_CONF_ERROR;
+    }
+    *once = 1;  /* default to once */
 
     if (cf->args->nelts == 4) {
         /* 3 user args */
@@ -1608,11 +1690,11 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         for (i = 0; i < value[3].len; i++) {
             switch (p[i]) {
             case 'i':
-                flags |= SRE_REGEX_CASELESS;
+                *flags |= SRE_REGEX_CASELESS;
                 break;
 
             case 'g':
-                rlcf->once = 0;
+                *once = 0;
                 break;
 
             default:
@@ -1621,36 +1703,29 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         }
     }
 
-    ppool = sre_create_pool(1024);
-    if (ppool == NULL) {
-        return NGX_CONF_ERROR;
+    if (*once) {
+        rlcf->seen_once = 1;
+
+    } else {
+        rlcf->seen_global = 1;
     }
 
-    dd("regex: %s", value[1].data);
+    if (rlcf->seen_once && rlcf->regexes.nelts > 1) {
+        rlcf->parse_buf = ngx_http_replace_capturing_parse;
 
-    re = sre_regex_parse(ppool, value[1].data, &rlcf->ncaps, flags,
-                         &err_offset);
-    if (re == NULL) {
-        if (err_offset >= 0 && (size_t) err_offset <= rlcf->match.len) {
-            prefix.data = rlcf->match.data;
-            prefix.len = err_offset;
+        if (rlcf->verbatim.value.data == NULL) {
+            ngx_str_t           v = ngx_string("$&");
 
-            suffix.data = rlcf->match.data + err_offset;
-            suffix.len = rlcf->match.len - err_offset;
+            ngx_memzero(&ccv, sizeof(ngx_http_replace_compile_complex_value_t));
 
-            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                               "failed to parse regex at offset %i: "
-                               "syntax error; marked by <-- HERE in "
-                               "\"%V <-- HERE %V\"",
-                               (ngx_int_t) err_offset, &prefix, &suffix);
+            ccv.cf = cf;
+            ccv.value = &v;
+            ccv.complex_value = &rlcf->verbatim;
 
-        } else {
-            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                               "failed to parse regex \"%V\"", &rlcf->match);
+            if (ngx_http_replace_compile_complex_value(&ccv) != NGX_OK) {
+                return NGX_CONF_ERROR;
+            }
         }
-
-        sre_destroy_pool(ppool);
-        return NGX_CONF_ERROR;
     }
 
     rmcf =
@@ -1659,7 +1734,6 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     if (rmcf->compiler_pool == NULL) {
         rmcf->compiler_pool = sre_create_pool(SREGEX_COMPILER_POOL_SIZE);
         if (rmcf->compiler_pool == NULL) {
-            sre_destroy_pool(ppool);
             return NGX_CONF_ERROR;
         }
 
@@ -1667,26 +1741,12 @@ ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         if (cln == NULL) {
             sre_destroy_pool(rmcf->compiler_pool);
             rmcf->compiler_pool = NULL;
-            sre_destroy_pool(ppool);
             return NGX_CONF_ERROR;
         }
 
         cln->data = rmcf->compiler_pool;
         cln->handler = ngx_http_replace_cleanup_pool;
     }
-
-    prog = sre_regex_compile(rmcf->compiler_pool, re);
-
-    sre_destroy_pool(ppool);
-
-    if (prog == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-                           "failed to compile regex \"%V\"", &rlcf->match);
-        return NGX_CONF_ERROR;
-    }
-
-    rlcf->program = prog;
-    rlcf->ovecsize = 2 * (rlcf->ncaps + 1) * sizeof(sre_int_t);
 
     return NGX_CONF_OK;
 }
@@ -1705,18 +1765,27 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
     /*
      * set by ngx_pcalloc():
      *
-     *     conf->match = { 0, NULL };
-     *     conf->value = { 0, NULL };
      *     conf->types = { NULL };
      *     conf->types_keys = NULL;
      *     conf->program = NULL;
      *     conf->ncaps = 0;
      *     conf->ovecsize = 0;
      *     conf->parse_buf = NULL;
+     *     conf->verbatim = { {0, NULL}, NULL, NULL, 0 };
+     *     conf->seen_once = 0;
+     *     conf->seen_global = 0;
      */
 
-    conf->once = NGX_CONF_UNSET;
     conf->max_buffered_size = NGX_CONF_UNSET_SIZE;
+
+    ngx_array_init(&conf->multi_replace, cf->pool, 4,
+                   sizeof(ngx_http_replace_complex_value_t));
+
+    ngx_array_init(&conf->multi_flags, cf->pool, 4, sizeof(int));
+
+    ngx_array_init(&conf->regexes, cf->pool, 4, sizeof(u_char *));
+
+    ngx_array_init(&conf->multi_once, cf->pool, 4, sizeof(uint8_t));
 
     return conf;
 }
@@ -1725,29 +1794,21 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
 static char *
 ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
 {
+    u_char         **value;
+    sre_int_t        err_offset, err_regex_id;
+    ngx_str_t        prefix, suffix;
+    sre_pool_t      *ppool; /* parser pool */
+    sre_regex_t     *re;
+    sre_program_t   *prog;
+
+    ngx_http_replace_main_conf_t    *rmcf;
+
     ngx_http_replace_loc_conf_t *prev = parent;
     ngx_http_replace_loc_conf_t *conf = child;
-
-    ngx_conf_merge_value(conf->once, prev->once, 1);
-    ngx_conf_merge_str_value(conf->match, prev->match, "");
-
-    if (conf->replace.value.len == 0) {
-        conf->replace = prev->replace;
-    }
-
-    if (conf->parse_buf == NULL) {
-        conf->parse_buf = prev->parse_buf;
-    }
 
     ngx_conf_merge_size_value(conf->max_buffered_size,
                               prev->max_buffered_size,
                               8192);
-
-    if (conf->program == NULL) {
-        conf->program = prev->program;
-        conf->ncaps = prev->ncaps;
-        conf->ovecsize = prev->ovecsize;
-    }
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
                              &prev->types_keys, &prev->types,
@@ -1755,6 +1816,88 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
+    }
+
+    if (conf->regexes.nelts > 0 && conf->program == NULL) {
+
+        dd("parsing and compiling %d regexes", (int) conf->regexes.nelts);
+
+        ppool = sre_create_pool(1024);
+        if (ppool == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        value = conf->regexes.elts;
+
+        re = sre_regex_parse_multi(ppool, value, conf->regexes.nelts,
+                                   &conf->ncaps, conf->multi_flags.elts,
+                                   &err_offset, &err_regex_id);
+
+        if (re == NULL) {
+
+            if (err_offset >= 0) {
+                prefix.data = value[err_regex_id];
+                prefix.len = err_offset;
+
+                suffix.data = value[err_regex_id] + err_offset;
+                suffix.len = ngx_strlen(value[err_regex_id]) - err_offset;
+
+                ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                   "failed to parse regex at offset %i: "
+                                   "syntax error; marked by <-- HERE in "
+                                   "\"%V <-- HERE %V\"",
+                                   (ngx_int_t) err_offset, &prefix, &suffix);
+
+            } else {
+
+                if (err_regex_id >= 0) {
+                    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                       "failed to parse regex \"%s\"",
+                                       value[err_regex_id]);
+
+                } else {
+                    ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                                       "failed to parse regex \"%s\" "
+                                       "and its siblings",
+                                       value[0]);
+                }
+            }
+
+            sre_destroy_pool(ppool);
+            return NGX_CONF_ERROR;
+        }
+
+        rmcf = ngx_http_conf_get_module_main_conf(cf,
+                                              ngx_http_replace_filter_module);
+
+        prog = sre_regex_compile(rmcf->compiler_pool, re);
+
+        sre_destroy_pool(ppool);
+
+        if (prog == NULL) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+                               "failed to compile regex \"%s\" and its "
+                               "siblings", value[0]);
+
+            return NGX_CONF_ERROR;
+        }
+
+        conf->program = prog;
+        conf->ovecsize = 2 * (conf->ncaps + 1) * sizeof(sre_int_t);
+
+    } else {
+
+        conf->regexes       = prev->regexes;
+        conf->multi_once    = prev->multi_once;
+        conf->multi_flags   = prev->multi_flags;
+        conf->multi_replace = prev->multi_replace;
+        conf->parse_buf     = prev->parse_buf;
+        conf->verbatim      = prev->verbatim;
+        conf->program       = prev->program;
+        conf->ncaps         = prev->ncaps;
+        conf->ovecsize      = prev->ovecsize;
+        conf->seen_once     = prev->seen_once;
+        conf->seen_global   = prev->seen_global;
     }
 
     return NGX_CONF_OK;
@@ -1775,6 +1918,8 @@ ngx_http_replace_filter_init(ngx_conf_t *cf)
 
         ngx_http_next_body_filter = ngx_http_top_body_filter;
         ngx_http_top_body_filter = ngx_http_replace_body_filter;
+
+        return NGX_OK;
     }
 
     return NGX_OK;

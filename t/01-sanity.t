@@ -12,7 +12,7 @@ repeat_each(2);
 
 #no_shuffle();
 
-plan tests => repeat_each() * (blocks() * 4);
+plan tests => repeat_each() * (blocks() * 4 + 1);
 
 our $StapOutputChains = <<'_EOC_';
 global active
@@ -76,6 +76,23 @@ __DATA__
     }
 --- request
 GET /t
+
+--- stap
+F(ngx_http_replace_non_capturing_parse) {
+    println("non capturing parse")
+}
+
+F(ngx_http_replace_capturing_parse) {
+    println("capturing parse")
+}
+
+F(ngx_http_replace_complex_value) {
+    println("complex value")
+}
+
+--- stap_out_like chop
+^(non capturing parse\n)+$
+
 --- response_body
 abcXe
 --- no_error_log

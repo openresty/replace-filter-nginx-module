@@ -10,9 +10,9 @@ use Test::Nginx::Socket;
 
 repeat_each(2);
 
-no_shuffle();
+#no_shuffle();
 
-plan tests => repeat_each() * (blocks() * 4);
+plan tests => repeat_each() * (blocks() * 4 + 1);
 
 our $StapOutputChains = <<'_EOC_';
 global active
@@ -1872,6 +1872,18 @@ GET /t
     }
 --- request
 GET /t
+
+--- stap
+F(ngx_http_replace_complex_value) {
+    println("complex value")
+}
+
+--- stap_out
+complex value
+complex value
+complex value
+complex value
+
 --- response_body
 [--X][--X][--X][--X]
 

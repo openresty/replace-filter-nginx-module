@@ -12,7 +12,7 @@ repeat_each(2);
 
 #no_shuffle();
 
-plan tests => repeat_each() * (blocks() * 4);
+plan tests => repeat_each() * (blocks() * 4 + 3);
 
 our $StapOutputChains = <<'_EOC_';
 global active
@@ -77,6 +77,19 @@ __DATA__
     }
 --- request
 GET /t
+
+--- stap
+F(ngx_http_replace_non_capturing_parse) {
+    println("non capturing parse")
+}
+
+F(ngx_http_replace_capturing_parse) {
+    println("capturing parse")
+}
+
+--- stap_out_like chop
+^(non capturing parse\n)+$
+
 --- response_body chop
 XXXX
 --- no_error_log
@@ -96,6 +109,19 @@ XXXX
     }
 --- request
 GET /t
+
+--- stap
+F(ngx_http_replace_non_capturing_parse) {
+    println("non capturing parse")
+}
+
+F(ngx_http_replace_capturing_parse) {
+    println("capturing parse")
+}
+
+--- stap_out_like chop
+^(non capturing parse\n)+$
+
 --- response_body
 Xbc
 --- no_error_log
@@ -235,6 +261,34 @@ GET /t
 GET /t
 --- response_body
 [\X,\Y]bc
+--- no_error_log
+[alert]
+[error]
+
+
+
+=== TEST 10: cached subs values
+--- config
+    default_type text/html;
+    replace_filter_max_buffered_size 0;
+    location /t {
+        set $foo X;
+        echo abc;
+        replace_filter . "$foo" g;
+    }
+--- request
+GET /t
+--- response_body chop
+XXXX
+
+--- stap
+F(ngx_http_replace_complex_value) {
+    println("complex value")
+}
+
+--- stap_out
+complex value
+
 --- no_error_log
 [alert]
 [error]
