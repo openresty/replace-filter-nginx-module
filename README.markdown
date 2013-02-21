@@ -47,9 +47,13 @@ Synopsis
     location ~ '\.cpp$' {
         # proxy_pass/fastcgi_pass/root/...
 
-        # remove all those ugly C/C++ comments:
+        replace_filter_types text/plain;
+
+        # skip C/C++ string literals:
         replace_filter "'(?:\\\\[^\n]|[^'\n])*'" $& g;
         replace_filter '"(?:\\\\[^\n]|[^"\n])*"' $& g;
+
+        # remove all those ugly C/C++ comments:
         replace_filter '/\*.*?\*/|//[^\n]*' '' g;
     }
 
