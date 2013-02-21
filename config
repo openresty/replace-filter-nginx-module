@@ -72,7 +72,12 @@ HTTP_AUX_FILTER_MODULES="$HTTP_AUX_FILTER_MODULES ngx_http_replace_filter_module
 
 NGX_ADDON_SRCS="$NGX_ADDON_SRCS \
                 $ngx_addon_dir/src/ngx_http_replace_filter_module.c \
-                $ngx_addon_dir/src/ngx_http_replace_script.c"
+                $ngx_addon_dir/src/ngx_http_replace_script.c \
+                $ngx_addon_dir/src/ngx_http_replace_parse.c \
+                $ngx_addon_dir/src/ngx_http_replace_util.c"
 
 NGX_ADDON_DEPS="$NGX_ADDON_DEPS \
-                $ngx_addon_dir/src/ngx_http_replace_script.h"
+                $ngx_addon_dir/src/ngx_http_replace_filter_module.h \
+                $ngx_addon_dir/src/ngx_http_replace_script.h \
+                $ngx_addon_dir/src/ngx_http_replace_parse.h \
+                $ngx_addon_dir/src/ngx_http_replace_util.h"

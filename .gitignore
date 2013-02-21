@@ -37,4 +37,6 @@ re
 *.plist
 Makefile
 src/script.[ch]
+src/parse.[ch]
+src/util.[ch]
 *.patch
