@@ -8,9 +8,8 @@ ngx_replace_filter - Streaming regular expression replacement in response bodies
 Status
 ======
 
-This module is at the early phase of development and is considered highly experimental.
-
-The user interface is still in flux and may be changed without notice.
+This module is already quite usable though still at the early phase of development
+and is considered experimental.
 
 Synopsis
 ========
