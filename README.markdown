@@ -128,6 +128,9 @@ Here is an example for removing all the C/C++ comments from a C/C++ source code 
     replace_filter '"(?:\\\\[^\n]|[^"\n])*"' $& g;
     replace_filter '/\*.*?\*/|//[^\n]*' '' g;
 
+When the `Content-Encoding` response header is not empty (like `gzip`), the response
+body will always remain intact.
+
 replace_filter_types
 --------------------
 

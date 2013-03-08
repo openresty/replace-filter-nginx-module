@@ -122,6 +122,8 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
 
     if (rlcf->regexes.nelts == 0
         || r->headers_out.content_length_n == 0
+        || (r->headers_out.content_encoding
+            && r->headers_out.content_encoding->value.len)
         || ngx_http_test_content_type(r, &rlcf->types) == NULL)
     {
         return ngx_http_next_header_filter(r);
