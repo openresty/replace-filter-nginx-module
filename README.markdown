@@ -215,14 +215,14 @@ Please submit bug reports, wishlists, or patches by
 Author
 ======
 
-Yichun "agentzh" Zhang (章亦春) <agentzh@gmail.com>, CloudFlare.
+Yichun "agentzh" Zhang (章亦春) <agentzh@gmail.com>, CloudFlare Inc.
 
 Copyright and License
 =====================
 
 This module is licensed under the BSD license.
 
-Copyright (C) 2012, 2013, by Yichun "agentzh" Zhang (章亦春), CloudFlare.
+Copyright (C) 2012, 2013, by Yichun "agentzh" Zhang (章亦春), CloudFlare Inc.
 
 All rights reserved.
 
@@ -238,5 +238,5 @@ See Also
 ========
 
 * agentzh's sregex library: https://github.com/agentzh/sregex
-* the standard ngx_sub_filter module: http://nginx.org/en/docs/http/ngx_http_sub_module.html
-
+* The standard ngx_sub_filter module: http://nginx.org/en/docs/http/ngx_http_sub_module.html
+* Slides for my talk "sregex: matching Perl 5 regexes on data streams": http://agentzh.org/misc/slides/yapc-na-2013-sregex.pdf
