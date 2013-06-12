@@ -182,6 +182,13 @@ the `SREGEX_INC` and `SREGEX_LIB` environments before running the
 
 assuming that your sregex is installed to the prefix `/opt/sregex`.
 
+Trouble Shooting
+================
+
+* If you are seeing the error "error while loading shared libraries: libsregex.so.0: cannot open shared object file: No such file or directory"
+while starting nginx, then it means that the installation path of your libsregex library
+is not in your system's default library search path. You can solve this issue by passing the option `--with-ld-opt='-Wl,-rpath,/usr/local/lib'` to nginx's `./configure` command. Alternatively, you can just add the path of your libsregex.so.0 to the `LD_LIBRARY_PATH` environment value before starting your nginx server.
+
 TODO
 ====
 
