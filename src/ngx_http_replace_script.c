@@ -463,7 +463,10 @@ static void
 ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
 {
     sre_int_t                            *cap, from, to, len;
-    u_char                               *p, *pos;
+    u_char                               *p;
+#if (NGX_DEBUG)
+    u_char                               *pos;
+#endif
     ngx_uint_t                            n;
     ngx_chain_t                          *cl;
 
@@ -475,7 +478,9 @@ ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
 
     n = code->n;
 
+#if (NGX_DEBUG)
     pos = e->pos;
+#endif
 
     if (n < e->ncaptures) {
 
@@ -504,8 +509,10 @@ ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
         }
     }
 
+#if (NGX_DEBUG)
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, e->request->connection->log, 0,
                    "replace script capture: \"%*s\"", e->pos - pos, pos);
+#endif
 }
 
 
