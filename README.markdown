@@ -129,7 +129,13 @@ Here is an example for removing all the C/C++ comments from a C/C++ source code 
     replace_filter '/\*.*?\*/|//[^\n]*' '' g;
 
 When the `Content-Encoding` response header is not empty (like `gzip`), the response
-body will always remain intact.
+body will always remain intact. So usually you want to disable the gzip compression
+in your backend servers' responses by adding the following line to your `nginx.conf`
+if you are the ngx_proxy module:
+
+    proxy_set_header Accept-Encoding '';
+
+Your responses can still be gzip compressed on the Nginx server level though.
 
 replace_filter_types
 --------------------
