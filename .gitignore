@@ -32,7 +32,7 @@ src/module.[ch]
 all
 t/servroot/
 buildroot/
-build12
+build1[0-9]
 re
 *.plist
 Makefile
