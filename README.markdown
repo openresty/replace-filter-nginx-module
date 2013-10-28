@@ -36,6 +36,7 @@ and is considered experimental.
 Synopsis
 ========
 
+```nginx
     location /t {
         default_type text/html;
         echo abc;
@@ -77,6 +78,7 @@ Synopsis
         # remove all those ugly C/C++ comments:
         replace_filter '/\*.*?\*/|//[^\n]*' '' g;
     }
+```
 
 Description
 ===========
@@ -120,26 +122,36 @@ By default, the filter topped matching after the first match is found. This beha
 The following regex options are supported:
 
 * `g`
-: for global search and substituion (default off)
+
+    for global search and substituion (default off)
 * `i`
-: for case-insensitive matching (default off)
+
+    for case-insensitive matching (default off)
 
 Multiple options can be combined in a single string argument, for example:
 
+```nginx
     replace_filter hello hiya ig;
+```
 
 Nginx variables can be interpolated into the text to be replaced, for example:
 
+```nginx
     replace_filter \w+ "[$foo,$bar]";
+```
 
 If you want to use the literal dollar sign character (`$`), use the `$$` sequence for that,
 for instance:
 
+```nginx
     replace_filter \w "$$";
+```
 
 Use of submatch capturing variables like `$&`, `$1`, `$2`, and etc are also supported, for example,
 
+```nginx
     replace_filter [bc]|d [$&-$1-$2] g;
+```
 
 The semantics of the submatch capturing variables is exactly the same as in the Perl 5 language.
 
@@ -150,16 +162,20 @@ the configure file.
 
 Here is an example for removing all the C/C++ comments from a C/C++ source code file:
 
+```nginx
     replace_filter "'(?:\\\\[^\n]|[^'\n])*'" $& g;
     replace_filter '"(?:\\\\[^\n]|[^"\n])*"' $& g;
     replace_filter '/\*.*?\*/|//[^\n]*' '' g;
+```
 
 When the `Content-Encoding` response header is not empty (like `gzip`), the response
 body will always remain intact. So usually you want to disable the gzip compression
 in your backend servers' responses by adding the following line to your `nginx.conf`
 if you are the ngx_proxy module:
 
+```nginx
     proxy_set_header Accept-Encoding '';
+```
 
 Your responses can still be gzip compressed on the Nginx server level though.
 
@@ -208,15 +224,19 @@ https://github.com/agentzh/sregex
 
 And then rebuild your Nginx like this:
 
+```bash
     ./configure --add-module=/path/to/replace-filter-nginx-module
+```
 
 If sregex is not installed to the default prefix (i.e., `/usr/local`), then
 you should specify the locations of your sregex installation via
 the `SREGEX_INC` and `SREGEX_LIB` environments before running the
 `./configure` script, as in
 
+```bash
     export SREGEX_INC=/opt/sregex/include
     export SREGEX_LIB=/opt/sregex/lib
+```
 
 assuming that your sregex is installed to the prefix `/opt/sregex`.
 
