@@ -5,6 +5,28 @@ ngx_replace_filter - Streaming regular expression replacement in response bodies
 
 *This module is not distributed with the Nginx source.* See [the installation instructions](#installation).
 
+Table of Contents
+=================
+
+* [Name](#name)
+* [Status](#status)
+* [Synopsis](#synopsis)
+* [Description](#description)
+* [Directives](#directives)
+    * [replace_filter](#replace_filter)
+    * [replace_filter_types](#replace_filter_types)
+    * [replace_filter_max_buffered_size](#replace_filter_max_buffered_size)
+* [Installation](#installation)
+* [Trouble Shooting](#trouble-shooting)
+* [TODO](#todo)
+* [Community](#community)
+    * [English Mailing List](#english-mailing-list)
+    * [Chinese Mailing List](#chinese-mailing-list)
+* [Bugs and Patches](#bugs-and-patches)
+* [Author](#author)
+* [Copyright and License](#copyright-and-license)
+* [See Also](#see-also)
+
 Status
 ======
 
@@ -72,8 +94,12 @@ https://github.com/agentzh/sregex#syntax-supported
 
 Response body data is only buffered when absolutely necessary, like facing an incomplete capture that belongs to a possible match near the data chunk boundaries.
 
+[Back to TOC](#table-of-contents)
+
 Directives
 ==========
+
+[Back to TOC](#table-of-contents)
 
 replace_filter
 --------------
@@ -137,6 +163,8 @@ if you are the ngx_proxy module:
 
 Your responses can still be gzip compressed on the Nginx server level though.
 
+[Back to TOC](#table-of-contents)
+
 replace_filter_types
 --------------------
 
@@ -152,6 +180,8 @@ Specify one or more MIME types (in the `Content-Type` response header) to be pro
 
 By default, only `text/html` typed responses are processed.
 
+[Back to TOC](#table-of-contents)
+
 replace_filter_max_buffered_size
 ---------------------------------
 **syntax:** *replace_filter_max_buffered_size &lt;size&gt;*
@@ -166,6 +196,8 @@ Limits the total size of the data buffered by the module at runtime. Default to 
 
 When the limit is reached, `replace_filter` will immediately stop processing and
 leave all the remaining response body data intact.
+
+[Back to TOC](#table-of-contents)
 
 Installation
 ============
@@ -188,12 +220,16 @@ the `SREGEX_INC` and `SREGEX_LIB` environments before running the
 
 assuming that your sregex is installed to the prefix `/opt/sregex`.
 
+[Back to TOC](#table-of-contents)
+
 Trouble Shooting
 ================
 
 * If you are seeing the error "error while loading shared libraries: libsregex.so.0: cannot open shared object file: No such file or directory"
 while starting nginx, then it means that the installation path of your libsregex library
 is not in your system's default library search path. You can solve this issue by passing the option `--with-ld-opt='-Wl,-rpath,/usr/local/lib'` to nginx's `./configure` command. Alternatively, you can just add the path of your libsregex.so.0 to the `LD_LIBRARY_PATH` environment value before starting your nginx server.
+
+[Back to TOC](#table-of-contents)
 
 TODO
 ====
@@ -204,18 +240,26 @@ TODO
 * recycle the memory blocks used to buffer the pending capture data and "complex values" for replacement.
 * allow use of inlined Lua code as the `replacement` argument of the `replace_filter` directive to generate the text to be replaced on-the-fly.
 
+[Back to TOC](#table-of-contents)
+
 Community
 =========
+
+[Back to TOC](#table-of-contents)
 
 English Mailing List
 --------------------
 
 The [openresty-en](https://groups.google.com/group/openresty-en) mailing list is for English speakers.
 
+[Back to TOC](#table-of-contents)
+
 Chinese Mailing List
 --------------------
 
 The [openresty](https://groups.google.com/group/openresty) mailing list is for Chinese speakers.
+
+[Back to TOC](#table-of-contents)
 
 Bugs and Patches
 ================
@@ -225,10 +269,14 @@ Please submit bug reports, wishlists, or patches by
 1. creating a ticket on the [GitHub Issue Tracker](http://github.com/agentzh/replace-filter-nginx-module/issues),
 1. or posting to the [OpenResty community](http://wiki.nginx.org/HttpLuaModule#Community).
 
+[Back to TOC](#table-of-contents)
+
 Author
 ======
 
 Yichun "agentzh" Zhang (章亦春) <agentzh@gmail.com>, CloudFlare Inc.
+
+[Back to TOC](#table-of-contents)
 
 Copyright and License
 =====================
@@ -247,9 +295,13 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+[Back to TOC](#table-of-contents)
+
 See Also
 ========
 
 * agentzh's sregex library: https://github.com/agentzh/sregex
 * The standard ngx_sub_filter module: http://nginx.org/en/docs/http/ngx_http_sub_module.html
 * Slides for my talk "sregex: matching Perl 5 regexes on data streams": http://agentzh.org/misc/slides/yapc-na-2013-sregex.pdf
+[Back to TOC](#table-of-contents)
+
