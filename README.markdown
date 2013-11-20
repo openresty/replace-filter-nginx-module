@@ -16,6 +16,7 @@ Table of Contents
     * [replace_filter](#replace_filter)
     * [replace_filter_types](#replace_filter_types)
     * [replace_filter_max_buffered_size](#replace_filter_max_buffered_size)
+    * [replace_filter_last_modified](#replace_filter_last_modified)
 * [Installation](#installation)
 * [Trouble Shooting](#trouble-shooting)
 * [TODO](#todo)
@@ -235,6 +236,8 @@ By default, this module will clear the `Last-Modified` response header if there 
 ```
 
 to always keep the original `Last-Modified` response header.
+
+[Back to TOC](#table-of-contents)
 
 Installation
 ============
