@@ -83,6 +83,9 @@ typedef struct {
 
     size_t                     max_buffered_size;
 
+    ngx_uint_t                 last_modified;
+                                    /* replace_filter_last_modified */
+
     ngx_http_replace_parse_buf_pt       parse_buf;
     ngx_http_replace_complex_value_t    verbatim;
 

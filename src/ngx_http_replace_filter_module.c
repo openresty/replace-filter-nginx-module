@@ -46,6 +46,17 @@ static void * ngx_http_replace_create_main_conf(ngx_conf_t *cf);
 static volatile ngx_cycle_t  *ngx_http_replace_prev_cycle = NULL;
 
 
+#define NGX_HTTP_REPLACE_CLEAR_LAST_MODIFIED    0
+#define NGX_HTTP_REPLACE_KEEP_LAST_MODIFIED     1
+
+
+static ngx_conf_enum_t  ngx_http_replace_filter_last_modified[] = {
+    { ngx_string("clear"), NGX_HTTP_REPLACE_CLEAR_LAST_MODIFIED },
+    { ngx_string("keep"), NGX_HTTP_REPLACE_KEEP_LAST_MODIFIED },
+    { ngx_null_string, 0 }
+};
+
+
 static ngx_command_t  ngx_http_replace_filter_commands[] = {
 
     { ngx_string("replace_filter"),
@@ -71,6 +82,14 @@ static ngx_command_t  ngx_http_replace_filter_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_replace_loc_conf_t, max_buffered_size),
       NULL },
+
+    { ngx_string("replace_filter_last_modified"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_1MORE,
+      ngx_conf_set_enum_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_replace_loc_conf_t, last_modified),
+      &ngx_http_replace_filter_last_modified },
 
       ngx_null_command
 };
@@ -189,7 +208,10 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
 
     if (r == r->main) {
         ngx_http_clear_content_length(r);
-        ngx_http_clear_last_modified(r);
+
+        if (rlcf->last_modified == NGX_HTTP_REPLACE_CLEAR_LAST_MODIFIED) {
+            ngx_http_clear_last_modified(r);
+        }
     }
 
     return ngx_http_next_header_filter(r);
@@ -785,6 +807,7 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
      */
 
     conf->max_buffered_size = NGX_CONF_UNSET_SIZE;
+    conf->last_modified = NGX_CONF_UNSET_UINT;
 
     ngx_array_init(&conf->multi_replace, cf->pool, 4,
                    sizeof(ngx_http_replace_complex_value_t));
@@ -817,6 +840,10 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_size_value(conf->max_buffered_size,
                               prev->max_buffered_size,
                               8192);
+
+    ngx_conf_merge_uint_value(conf->last_modified,
+                              prev->last_modified,
+                              NGX_HTTP_REPLACE_CLEAR_LAST_MODIFIED);
 
     if (ngx_http_merge_types(cf, &conf->types_keys, &conf->types,
                              &prev->types_keys, &prev->types,

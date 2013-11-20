@@ -215,6 +215,27 @@ leave all the remaining response body data intact.
 
 [Back to TOC](#table-of-contents)
 
+replace_filter_last_modified
+----------------------------
+
+**syntax:** *replace_filter_last_modifiled keep | clear*
+
+**default:** *replace_filter_last_modified clear*
+
+**context:** *http, server, location, location if*
+
+**phase:** *output body filter*
+
+Controls how to deal with the existing Last-Modified response header.
+
+By default, this module will clear the `Last-Modified` response header if there is any. You can specify
+
+```nginx
+    replace_filter_last_modified keep;
+```
+
+to always keep the original `Last-Modified` response header.
+
 Installation
 ============
 
