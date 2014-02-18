@@ -361,7 +361,7 @@ Copyright and License
 
 This module is licensed under the BSD license.
 
-Copyright (C) 2012, 2013, by Yichun "agentzh" Zhang (章亦春), CloudFlare Inc.
+Copyright (C) 2012-2014, by Yichun "agentzh" Zhang (章亦春), CloudFlare Inc.
 
 All rights reserved.
 
