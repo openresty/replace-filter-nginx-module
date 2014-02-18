@@ -239,6 +239,37 @@ to always keep the original `Last-Modified` response header.
 
 [Back to TOC](#table-of-contents)
 
+replace_filter_skip
+-------------------
+
+**syntax:** *replace_filter_skip $var*
+
+**default:** *no*
+
+**context:** *http, server, location, location if*
+
+**phase:** *output header filter*
+
+This directive controls whether to skip all the `replace_filter` rules on a per-request basis.
+
+Both constant values or strings containing NGINX variables are supported.
+
+When the value is evaluated to an empty value ("") or the value "0" in the request output header phase, no `replace_filter` rules will be skipped for the current request. Otherwise all the `replace_filter` rules will be skipped for the current request.
+
+Below is a trivial example for this:
+
+```nginx
+set $skip '';
+location /t {
+    content_by_lua '
+        ngx.var.skip = 1
+        ngx.say("abcabd")
+    ';
+    replace_filter_skip $skip;
+    replace_filter abcabd X;
+}
+```
+
 Installation
 ============
 

@@ -91,6 +91,14 @@ static ngx_command_t  ngx_http_replace_filter_commands[] = {
       offsetof(ngx_http_replace_loc_conf_t, last_modified),
       &ngx_http_replace_filter_last_modified },
 
+    { ngx_string("replace_filter_skip"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+          |NGX_CONF_TAKE1,
+      ngx_http_set_complex_value_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_replace_loc_conf_t, skip),
+      NULL },
+
       ngx_null_command
 };
 
@@ -134,6 +142,7 @@ static ngx_int_t
 ngx_http_replace_header_filter(ngx_http_request_t *r)
 {
     size_t                         size;
+    ngx_str_t                      skip;
     ngx_pool_cleanup_t            *cln;
     ngx_http_replace_ctx_t        *ctx;
     ngx_http_replace_loc_conf_t  *rlcf;
@@ -149,6 +158,18 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
         || ngx_http_test_content_type(r, &rlcf->types) == NULL)
     {
         return ngx_http_next_header_filter(r);
+    }
+
+    dd("skip: %p", rlcf->skip);
+
+    if (rlcf->skip != NULL) {
+        if (ngx_http_complex_value(r, rlcf->skip, &skip) != NGX_OK) {
+            return NGX_ERROR;
+        }
+
+        if (skip.len && (skip.len != 1 || skip.data[0] != '0')) {
+            return ngx_http_next_header_filter(r);
+        }
     }
 
     ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_replace_ctx_t));
@@ -526,10 +547,12 @@ rematch:
         }
 
 #if (DDEBUG)
+        /*
         ngx_http_replace_dump_chain("ctx->pending", &ctx->pending,
                                     ctx->last_pending);
         ngx_http_replace_dump_chain("ctx->pending2", &ctx->pending2,
                                     ctx->last_pending2);
+        */
 #endif
     } /* while */
 
@@ -562,7 +585,7 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
         b = cl->buf;
     }
 
-    ngx_http_replace_dump_chain("ctx->out", &ctx->out, ctx->last_out);
+    /* ngx_http_replace_dump_chain("ctx->out", &ctx->out, ctx->last_out); */
 #endif
 
     rc = ngx_http_next_body_filter(r, ctx->out);
@@ -804,6 +827,7 @@ ngx_http_replace_create_loc_conf(ngx_conf_t *cf)
      *     conf->verbatim = { {0, NULL}, NULL, NULL, 0 };
      *     conf->seen_once = 0;
      *     conf->seen_global = 0;
+     *     conf->skip = NULL;
      */
 
     conf->max_buffered_size = NGX_CONF_UNSET_SIZE;
@@ -851,6 +875,10 @@ ngx_http_replace_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
+    }
+
+    if (conf->skip == NULL) {
+        conf->skip = prev->skip;
     }
 
     if (conf->regexes.nelts > 0 && conf->program == NULL) {

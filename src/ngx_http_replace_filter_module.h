@@ -89,6 +89,8 @@ typedef struct {
     ngx_http_replace_parse_buf_pt       parse_buf;
     ngx_http_replace_complex_value_t    verbatim;
 
+    ngx_http_complex_value_t  *skip;
+
     unsigned                   seen_once;  /* :1 */
     unsigned                   seen_global;  /* :1 */
 } ngx_http_replace_loc_conf_t;
