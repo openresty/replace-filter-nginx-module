@@ -17,6 +17,7 @@ Table of Contents
     * [replace_filter_types](#replace_filter_types)
     * [replace_filter_max_buffered_size](#replace_filter_max_buffered_size)
     * [replace_filter_last_modified](#replace_filter_last_modified)
+    * [replace_filter_skip](#replace_filter_skip)
 * [Installation](#installation)
 * [Trouble Shooting](#trouble-shooting)
 * [TODO](#todo)
@@ -269,6 +270,8 @@ location /t {
     replace_filter abcabd X;
 }
 ```
+
+[Back to TOC](#table-of-contents)
 
 Installation
 ============
