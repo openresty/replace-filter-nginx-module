@@ -21,6 +21,7 @@ ngx-build $force $version \
             --without-http_auth_basic_module \
             --without-http_userid_module \
           --add-module=$root $opts \
+          --add-module=$home/git/ndk-nginx-module \
           --add-module=$home/git/lua-nginx-module \
           --add-module=$home/git/echo-nginx-module \
           --with-debug
