@@ -590,6 +590,10 @@ ngx_http_replace_output(ngx_http_request_t *r, ngx_http_replace_ctx_t *ctx)
 
     rc = ngx_http_next_body_filter(r, ctx->out);
 
+    /* we are essentially duplicating the logic of
+     * ngx_chain_update_chains below,
+     * with our own optimizations */
+
     if (ctx->busy == NULL) {
         ctx->busy = ctx->out;
 
