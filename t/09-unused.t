@@ -82,6 +82,9 @@ abcabcabde
 
 
 === TEST 3: used (multi http {} blocks)
+This test case won't run with nginx 1.9.3+ since duplicate http {} blocks
+have been prohibited since then.
+--- SKIP
 --- config
     default_type text/html;
     replace_filter_max_buffered_size 0;
