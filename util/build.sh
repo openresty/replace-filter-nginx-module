@@ -8,7 +8,7 @@ version=$1
 force=$2
 
 ngx-build $force $version \
-            --with-ld-opt="-L$PCRE_LIB -Wl,-rpath,$SREGEX_LIB:$LUAJIT_LIB:$PCRE_LIB:/usr/local/lib" \
+            --with-ld-opt="-L$PCRE_LIB -Wl,-rpath,$SREGEX_LIB:$PCRE_LIB:/usr/local/lib" \
         --with-http_ssl_module \
             --without-mail_pop3_module \
             --without-mail_imap_module \
