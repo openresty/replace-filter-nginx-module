@@ -1,0 +1,42 @@
+sudo: required
+dist: trusty
+
+os: linux
+
+language: c
+
+compiler:
+  - gcc
+  - clang
+
+env:
+  global:
+    - LUAJIT_LIB=/usr/lib64/libluajit-5.1.so
+    - LUAJIT_INC=/usr/include/luajit-2.0
+    - LUA_INCLUDE_DIR=/usr/include/luajit-2.0
+    - LUA_CMODULE_DIR=/lib
+  matrix:
+    - NGINX_VERSION=1.10.0
+    - NGINX_VERSION=1.9.15
+    
+before_install:
+  - sudo apt-get install -qq -y cpanminus libluajit-5.1-dev libgd-dev libpcre3-dev
+  - sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
+  
+install:
+  - wget http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
+  - git clone https://github.com/openresty/lua-nginx-module.git
+  - git clone https://github.com/openresty/echo-nginx-module.git
+  - git clone https://github.com/simpl/ngx_devel_kit.git
+  - git clone https://github.com/openresty/sregex.git
+  
+script:
+  - cd sregex && sudo make PREFIX=/usr install && cd ..
+  - tar xzf nginx-${NGINX_VERSION}.tar.gz
+  - cd nginx-${NGINX_VERSION}/
+  -  ./configure --with-debug --with-pcre --with-pcre-jit --with-ipv6 --with-poll_module --add-module=.. --add-module=../lua-nginx-module --add-module=../echo-nginx-module > build.log 2>&1 || (cat build.log && exit 1)
+  - make -j2 > build.log 2>&1 || (cat build.log && exit 1)
+  - export PATH=$PATH:`pwd`/objs
+  - cd ..
+  - nginx -V
+  - prove -lv t
