@@ -75,6 +75,8 @@ script:
   - export PATH=$PWD/work/nginx/sbin:$PWD/nginx-devel-utils:$PATH
   - export NGX_BUILD_CC=$CC
   - if [ "$CC" == "clang" ]; then export CFLAGS="-Qunused-arguments"; fi
+  - pwd
+  - find . -name build.sh -print
   - sh util/build.sh $NGINX_VERSION > build.log 2>&1 || (cat build.log && exit 1)
   - nginx -V
   - prove -r t
