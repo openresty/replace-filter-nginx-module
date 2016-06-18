@@ -81,3 +81,4 @@ script:
   - sh util/build.sh $NGINX_VERSION > build.log 2>&1 || (cat build.log && exit 1)
   - nginx -V
   - prove -r t
+
