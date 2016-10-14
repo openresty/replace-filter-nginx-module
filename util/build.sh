@@ -21,11 +21,10 @@ ngx-build $force $version \
             --without-http_auth_basic_module \
             --without-http_userid_module \
           --add-module=$root $opts \
-          --add-module=$home/git/ndk-nginx-module \
-          --add-module=$home/git/lua-nginx-module \
-          --add-module=$home/git/echo-nginx-module \
+          --add-module=$root/../ndk-nginx-module \
+          --add-module=$root/../lua-nginx-module \
+          --add-module=$root/../echo-nginx-module \
           --with-debug
           #--with-cc-opt="-g3 -O0"
-          #--add-module=$root/../echo-nginx-module \
   #--without-http_ssi_module  # we cannot disable ssi because echo_location_async depends on it (i dunno why?!)
 
