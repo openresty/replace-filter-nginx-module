@@ -90,7 +90,6 @@ fun:main
    Memcheck:Leak
    fun:malloc
    fun:ngx_alloc
-   fun:(below main)
 }
 {
    <insert_a_suppression_name_here>
