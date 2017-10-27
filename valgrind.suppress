@@ -1,16 +1,16 @@
 {
-<insert_a_suppression_name_here>
-Memcheck:Addr1
-fun:ngx_init_cycle
-fun:ngx_master_process_cycle
-fun:main
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:ngx_init_cycle
+   fun:ngx_master_process_cycle
+   fun:main
 }
 {
-<insert_a_suppression_name_here>
-Memcheck:Addr4
-fun:ngx_init_cycle
-fun:ngx_master_process_cycle
-fun:main
+   <insert_a_suppression_name_here>
+   Memcheck:Addr4
+   fun:ngx_init_cycle
+   fun:ngx_master_process_cycle
+   fun:main
 }
 {
    <insert_a_suppression_name_here>
@@ -79,20 +79,6 @@ fun:main
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Leak
-   fun:malloc
-   fun:ngx_alloc
-   fun:ngx_malloc
-   fun:ngx_pcalloc
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   fun:malloc
-   fun:ngx_alloc
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Param
    epoll_ctl(event)
    fun:epoll_ctl
@@ -120,14 +106,6 @@ fun:main
 }
 {
    <insert_a_suppression_name_here>
-   Memcheck:Leak
-   fun:memalign
-   fun:posix_memalign
-   fun:ngx_memalign
-   fun:ngx_pcalloc
-}
-{
-   <insert_a_suppression_name_here>
    Memcheck:Param
    socketcall.setsockopt(optval)
    fun:setsockopt
@@ -138,21 +116,7 @@ fun:main
    Memcheck:Leak
    fun:malloc
    fun:ngx_alloc
-   fun:ngx_palloc_large
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   fun:malloc
-   fun:ngx_alloc
    fun:ngx_pool_cleanup_add
-}
-{
-   <insert_a_suppression_name_here>
-   Memcheck:Leak
-   fun:malloc
-   fun:ngx_alloc
-   fun:ngx_pnalloc
 }
 {
    <insert_a_suppression_name_here>
