@@ -134,6 +134,7 @@ ngx_http_replace_new_pending_buf(ngx_http_request_t *r,
     size_t               len;
     ngx_buf_t           *b;
     ngx_chain_t         *cl;
+
     ngx_http_replace_loc_conf_t  *rlcf;
 
     if (from < ctx->stream_pos) {

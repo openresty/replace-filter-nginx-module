@@ -13,7 +13,7 @@
 #include "ngx_http_replace_script.h"
 
 
-static void * ngx_http_replace_script_add_code(ngx_array_t *codes, size_t size);
+static void *ngx_http_replace_script_add_code(ngx_array_t *codes, size_t size);
 static size_t ngx_http_replace_script_copy_len_code(
     ngx_http_replace_script_engine_t *e);
 static void
@@ -383,7 +383,8 @@ ngx_http_replace_script_copy_len_code(ngx_http_replace_script_engine_t *e)
 static void
 ngx_http_replace_script_copy_code(ngx_http_replace_script_engine_t *e)
 {
-    u_char                           *p;
+    u_char      *p;
+
     ngx_http_replace_script_copy_code_t  *code;
 
     code = (ngx_http_replace_script_copy_code_t *) e->ip;

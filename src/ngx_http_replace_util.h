@@ -5,7 +5,7 @@
 #include "ngx_http_replace_filter_module.h"
 
 
-ngx_chain_t * ngx_http_replace_get_free_buf(ngx_pool_t *p,
+ngx_chain_t *ngx_http_replace_get_free_buf(ngx_pool_t *p,
     ngx_chain_t **free);
 ngx_int_t ngx_http_replace_split_chain(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx, ngx_chain_t **pa, ngx_chain_t ***plast_a,

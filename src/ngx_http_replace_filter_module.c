@@ -25,14 +25,14 @@ enum {
 
 static ngx_int_t ngx_http_replace_output(ngx_http_request_t *r,
     ngx_http_replace_ctx_t *ctx);
-static char * ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd,
+static char *ngx_http_replace_filter(ngx_conf_t *cf, ngx_command_t *cmd,
     void *conf);
 static void *ngx_http_replace_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_replace_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
 static ngx_int_t ngx_http_replace_filter_init(ngx_conf_t *cf);
 static void ngx_http_replace_cleanup_pool(void *data);
-static void * ngx_http_replace_create_main_conf(ngx_conf_t *cf);
+static void *ngx_http_replace_create_main_conf(ngx_conf_t *cf);
 
 
 #define ngx_http_replace_regex_is_disabled(ctx)                              \
@@ -145,7 +145,7 @@ ngx_http_replace_header_filter(ngx_http_request_t *r)
     ngx_str_t                      skip;
     ngx_pool_cleanup_t            *cln;
     ngx_http_replace_ctx_t        *ctx;
-    ngx_http_replace_loc_conf_t  *rlcf;
+    ngx_http_replace_loc_conf_t   *rlcf;
 
     rlcf = ngx_http_get_module_loc_conf(r, ngx_http_replace_filter_module);
 
@@ -519,6 +519,7 @@ ngx_http_replace_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         }
 
 rematch:
+
         dd("ctx->rematch: %p", ctx->rematch);
 
         if (ctx->rematch == NULL) {
