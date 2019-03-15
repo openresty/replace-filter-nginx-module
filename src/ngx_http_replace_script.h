@@ -60,7 +60,7 @@ typedef struct {
 } ngx_http_replace_script_engine_t;
 
 
-typedef void (*ngx_http_replace_script_code_pt)
+typedef size_t (*ngx_http_replace_script_code_pt)
     (ngx_http_replace_script_engine_t *e);
 
 typedef size_t (*ngx_http_replace_script_len_code_pt)

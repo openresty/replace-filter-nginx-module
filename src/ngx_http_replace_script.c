@@ -16,7 +16,7 @@
 static void *ngx_http_replace_script_add_code(ngx_array_t *codes, size_t size);
 static size_t ngx_http_replace_script_copy_len_code(
     ngx_http_replace_script_engine_t *e);
-static void
+static size_t
     ngx_http_replace_script_copy_code(ngx_http_replace_script_engine_t *e);
 static ngx_int_t ngx_http_replace_script_add_copy_code(
     ngx_http_replace_script_compile_t *sc, ngx_str_t *value, ngx_uint_t last);
@@ -26,7 +26,7 @@ static ngx_int_t ngx_http_replace_script_add_capture_code(
     ngx_http_replace_script_compile_t *sc, ngx_uint_t n);
 static size_t ngx_http_replace_script_copy_capture_len_code(
     ngx_http_replace_script_engine_t *e);
-static void ngx_http_replace_script_copy_capture_code(
+static size_t ngx_http_replace_script_copy_capture_code(
     ngx_http_replace_script_engine_t *e);
 static ngx_int_t
     ngx_http_replace_script_done(ngx_http_replace_script_compile_t *sc);
@@ -38,7 +38,7 @@ static ngx_int_t
 static size_t
     ngx_http_replace_script_copy_var_len_code(
     ngx_http_replace_script_engine_t *e);
-static void
+static size_t
     ngx_http_replace_script_copy_var_code(ngx_http_replace_script_engine_t *e);
 static void ngx_http_replace_count_variables(u_char *src, size_t len,
     ngx_uint_t *ngxvars, ngx_uint_t *capvars);
@@ -357,7 +357,8 @@ ngx_http_replace_script_add_copy_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = ngx_http_replace_script_copy_code;
+    code->code = (ngx_http_replace_script_code_pt)
+                 ngx_http_replace_script_copy_code;
     code->len = len;
 
     ngx_memcpy((u_char *) code + sizeof(ngx_http_replace_script_copy_code_t),
@@ -380,7 +381,7 @@ ngx_http_replace_script_copy_len_code(ngx_http_replace_script_engine_t *e)
 }
 
 
-static void
+static size_t
 ngx_http_replace_script_copy_code(ngx_http_replace_script_engine_t *e)
 {
     u_char      *p;
@@ -402,6 +403,8 @@ ngx_http_replace_script_copy_code(ngx_http_replace_script_engine_t *e)
 
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, e->request->connection->log, 0,
                    "replace script copy: \"%*s\"", e->pos - p, p);
+
+    return 0;
 }
 
 
@@ -427,7 +430,8 @@ ngx_http_replace_script_add_capture_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = ngx_http_replace_script_copy_capture_code;
+    code->code = (ngx_http_replace_script_code_pt)
+                 ngx_http_replace_script_copy_capture_code;
     code->n = 2 * n;
 
     return NGX_OK;
@@ -460,7 +464,7 @@ ngx_http_replace_script_copy_capture_len_code(
 }
 
 
-static void
+static size_t
 ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
 {
     sre_int_t                            *cap, from, to, len;
@@ -514,6 +518,8 @@ ngx_http_replace_script_copy_capture_code(ngx_http_replace_script_engine_t *e)
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, e->request->connection->log, 0,
                    "replace script capture: \"%*s\"", e->pos - pos, pos);
 #endif
+
+    return 0;
 }
 
 
@@ -620,7 +626,8 @@ ngx_http_replace_script_add_var_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = ngx_http_replace_script_copy_var_code;
+    code->code = (ngx_http_replace_script_code_pt)
+                 ngx_http_replace_script_copy_var_code;
     code->index = (uintptr_t) index;
 
     return NGX_OK;
@@ -647,7 +654,7 @@ ngx_http_replace_script_copy_var_len_code(ngx_http_replace_script_engine_t *e)
 }
 
 
-static void
+static size_t
 ngx_http_replace_script_copy_var_code(ngx_http_replace_script_engine_t *e)
 {
     u_char                              *p;
@@ -671,6 +678,8 @@ ngx_http_replace_script_copy_var_code(ngx_http_replace_script_engine_t *e)
                            "http replace script var: \"%*s\"", e->pos - p, p);
         }
     }
+
+    return 0;
 }
 
 
