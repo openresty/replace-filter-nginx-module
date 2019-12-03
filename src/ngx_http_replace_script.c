@@ -345,7 +345,7 @@ ngx_http_replace_script_add_copy_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = (ngx_http_replace_script_code_pt)
+    code->code = (ngx_http_replace_script_code_pt)(void *)
                  ngx_http_replace_script_copy_len_code;
     code->len = len;
 
@@ -417,7 +417,7 @@ ngx_http_replace_script_add_capture_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = (ngx_http_replace_script_code_pt)
+    code->code = (ngx_http_replace_script_code_pt)(void *)
                  ngx_http_replace_script_copy_capture_len_code;
     code->n = 2 * n;
 
@@ -609,7 +609,7 @@ ngx_http_replace_script_add_var_code(ngx_http_replace_script_compile_t *sc,
         return NGX_ERROR;
     }
 
-    code->code = (ngx_http_replace_script_code_pt)
+    code->code = (ngx_http_replace_script_code_pt)(void *)
                  ngx_http_replace_script_copy_var_len_code;
 
     code->index = (uintptr_t) index;
