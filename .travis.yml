@@ -12,11 +12,11 @@ compiler:
 addons:
   apt:
     packages:
-    - axel
-    - cpanminus
-    - libluajit-5.1-dev
-    - libgd-dev
-    - libpcre3-dev
+      - axel
+      - cpanminus
+      - libluajit-5.1-dev
+      - libgd-dev
+      - libpcre3-dev
 
 cache:
   apt: true
@@ -30,10 +30,10 @@ env:
   matrix:
     - NGINX_VERSION=1.11.2
     - NGINX_VERSION=1.17.8
-    
+
 before_install:
   - sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
-  
+
 install:
   - git clone https://github.com/openresty/openresty.git ../openresty
   - git clone https://github.com/openresty/no-pool-nginx.git ../no-pool-nginx
@@ -42,7 +42,7 @@ install:
   - git clone https://github.com/openresty/echo-nginx-module.git ../echo-nginx-module
   - git clone https://github.com/simpl/ngx_devel_kit.git ../ndk-nginx-module
   - git clone https://github.com/openresty/sregex.git
-  
+
 script:
   - cd sregex && sudo make PREFIX=/usr install && cd ..
   - export PATH=$PWD/work/nginx/sbin:$PWD/nginx-devel-utils:$PATH
