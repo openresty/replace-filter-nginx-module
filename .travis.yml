@@ -1,5 +1,5 @@
 sudo: required
-dist: bionic
+dist: focal
 
 os: linux
 
@@ -30,6 +30,7 @@ env:
     - LD_LIBRARY_PATH=$LUAJIT_LIB:$LD_LIBRARY_PATH
   jobs:
     - NGINX_VERSION=1.21.4
+    - NGINX_VERSION=1.25.1 NGX_EXTRA_OPT=--without-pcre2
 
 before_install:
   - sudo cpanm --notest Test::Nginx > build.log 2>&1 || (cat build.log && exit 1)
@@ -37,7 +38,7 @@ before_install:
 install:
   - git clone https://github.com/openresty/openresty.git ../openresty
   - git clone https://github.com/openresty/no-pool-nginx.git ../no-pool-nginx
-  - git clone https://github.com/openresty/nginx-devel-utils.git
+  - git clone https://github.com/openresty/openresty-devel-utils.git
   - git clone https://github.com/openresty/lua-nginx-module.git ../lua-nginx-module
   - git clone https://github.com/openresty/echo-nginx-module.git ../echo-nginx-module
   - git clone https://github.com/simpl/ngx_devel_kit.git ../ndk-nginx-module
@@ -52,7 +53,7 @@ script:
   - make -j$JOBS CCDEBUG=-g Q= PREFIX=$LUAJIT_PREFIX CC=$CC XCFLAGS='-DLUA_USE_APICHECK -DLUA_USE_ASSERT -msse4.2' > build.log 2>&1 || (cat build.log && exit 1)
   - sudo make install PREFIX=$LUAJIT_PREFIX > build.log 2>&1 || (cat build.log && exit 1)
   - cd ..
-  - export PATH=$PWD/work/nginx/sbin:$PWD/nginx-devel-utils:$PATH
+  - export PATH=$PWD/work/nginx/sbin:$PWD/openresty-devel-utils:$PATH
   - sh util/build.sh $NGINX_VERSION > build.log 2>&1 || (cat build.log && exit 1)
   - nginx -V
   - prove -r t
