@@ -85,7 +85,7 @@ Synopsis
 Description
 ===========
 
-This Nginx output filter module tries to do regular expression substitions in
+This Nginx output filter module tries to do regular expression substitutions in
 a non-buffered manner wherever possible.
 
 This module does *not* use traditional backtracking regular expression engines like PCRE, rather,
@@ -117,15 +117,15 @@ replace_filter
 
 **phase:** *output body filter*
 
-Specifies the regex pattern and text to be replaced, with an optional regex flags.
+Specifies the regex pattern and text to be replaced, with optional regex flags.
 
-By default, the filter topped matching after the first match is found. This behavior can be changed by specifying the `g` regex option.
+By default, the filter stops matching after the first match is found. This behavior can be changed by specifying the `g` regex option.
 
 The following regex options are supported:
 
 * `g`
 
-    for global search and substituion (default off)
+    for global search and substitution (default off)
 * `i`
 
     for case-insensitive matching (default off)
